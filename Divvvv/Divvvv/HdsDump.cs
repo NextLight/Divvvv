@@ -37,10 +37,10 @@ namespace HDS
 
     internal class DownloadedFragmentArgs : EventArgs
     {
-        public int Downloaded { get; private set; }
-        public int FragmentsCount { get; private set; }
-        public TimeSpan CurrentTimestamp { get; private set; }
-        public TimeSpan TimeRemaining { get; private set; }
+        public int Downloaded { get; }
+        public int FragmentsCount { get; }
+        public TimeSpan CurrentTimestamp { get; }
+        public TimeSpan TimeRemaining { get; }
         public DownloadedFragmentArgs(int downloaded, int fragCount, TimeSpan currentTimestamp, TimeSpan timeRemaining)
         {
             Downloaded = downloaded;
@@ -53,7 +53,7 @@ namespace HDS
     internal class HdsDump
     {
         public static bool debug = false;
-        public static string logfile = "hdsdump.log";
+        public static string logfile = "STDOUT";
         public static int threads = 1;
         public static bool fproxy = false;
         private F4F f4f;
@@ -270,7 +270,8 @@ namespace HDS
                 }
             }
             string s = Cookies.Trim();
-            if ((s != "") && (s.Substring(s.Length - 1, 1) != ";")) Cookies = s + "; ";
+            if (s != "" && s.Substring(s.Length - 1, 1) != ";")
+                Cookies = s + "; ";
             if (POST)
             {
                 StreamWriter sw = new StreamWriter(request.GetRequestStream());
@@ -586,8 +587,10 @@ namespace HDS
                 if (baseUrl.IndexOf("?") > 0)
                     baseUrl = baseUrl.Substring(0, baseUrl.IndexOf("?"));
                 int i = baseUrl.LastIndexOf("/");
-                if (i >= 0) baseUrl = baseUrl.Substring(0, baseUrl.LastIndexOf("/"));
-                else baseUrl = "";
+                if (i >= 0)
+                    baseUrl = baseUrl.Substring(0, baseUrl.LastIndexOf("/"));
+                else
+                    baseUrl = "";
             }
             return baseUrl;
         }
@@ -670,25 +673,21 @@ namespace HDS
         private void ParseManifest(string manifestUrl)
         {
 
-            string baseUrl = "", defaultQuality = "";
-            int i = 0;
+            string defaultQuality = "";
 
             HdsDump.Message("Processing manifest info....");
             XmlElement xml = GetManifest(ref manifestUrl);
 
             XmlNode node = xml.SelectSingleNode("/ns:manifest/ns:baseURL", nsMgr);
-            if (node != null) baseUrl = node.InnerText.Trim();
-            if (baseUrl == "") baseUrl = ExtractBaseUrl(manifestUrl);
+            string baseUrl = node?.InnerText?.Trim() ?? ExtractBaseUrl(manifestUrl);
 
-            if ((baseUrl == "") && !IsHttpUrl(manifestUrl))
-                HdsDump.Quit(
-                    "<c:Red>Not found <c:Magenta>baseURL</c> value in manifest or in parameter <c:White>--urlbase</c>.");
+            if (baseUrl == "" && !IsHttpUrl(manifestUrl))
+                HdsDump.Quit("<c:Red>Not found <c:Magenta>baseURL</c> value in manifest or in parameter <c:White>--urlbase</c>.");
 
             XmlNodeList nodes = xml.SelectNodes("/ns:manifest/ns:media[@*]", nsMgr);
             Dictionary<string, Manifest> manifests = new Dictionary<string, Manifest>();
             int countBitrate = 0;
-            bool readChildManifests = false;
-            if (nodes.Count > 0) readChildManifests = AttrExist(nodes[0], "href");
+            bool readChildManifests = nodes.Count > 0 ? AttrExist(nodes[0], "href") : false;
             if (readChildManifests)
             {
                 foreach (XmlNode ManifestNode in nodes)
@@ -718,8 +717,7 @@ namespace HDS
 
                 // Extract baseUrl from manifest url
                 node = manifest.xml.SelectSingleNode("/ns:manifest/ns:baseURL", nsMgr);
-                if (node != null) baseUrl = node.InnerText.Trim();
-                else baseUrl = ExtractBaseUrl(manifest.url);
+                baseUrl = node?.InnerText?.Trim() ?? ExtractBaseUrl(manifest.url);
 
                 XmlNodeList MediaNodes = manifest.xml.SelectNodes("/ns:manifest/ns:media", nsMgr);
                 foreach (XmlNode stream in MediaNodes)
@@ -731,47 +729,37 @@ namespace HDS
                     else
                         sBitrate = countBitrate++.ToString();
 
-                    while (media.ContainsKey(sBitrate)) sBitrate = (int.Parse(sBitrate) + 1).ToString();
+                    while (media.ContainsKey(sBitrate))
+                        sBitrate = (int.Parse(sBitrate) + 1).ToString();
 
                     Media mediaEntry = new Media();
                     mediaEntry.baseUrl = baseUrl;
                     mediaEntry.url = GetNodeProperty(stream, "url");
 
                     if (IsRtmpUrl(mediaEntry.baseUrl) || IsRtmpUrl(mediaEntry.url))
-                        HdsDump.Quit(
-                            "<c:Red>Provided manifest is not a valid HDS manifest. (Media url is <c:Magenta>rtmp</c>?)");
+                        HdsDump.Quit("<c:Red>Provided manifest is not a valid HDS manifest. (Media url is <c:Magenta>rtmp</c>?)");
 
                     if (AttrExist(stream, "bootstrapInfoId"))
-                        node =
-                            manifest.xml.SelectSingleNode(
-                                "/ns:manifest/ns:bootstrapInfo[@id='" + GetNodeProperty(stream, "bootstrapInfoId") +
-                                "']", nsMgr);
+                        node = manifest.xml.SelectSingleNode($"/ns:manifest/ns:bootstrapInfo[@id='{GetNodeProperty(stream, "bootstrapInfoId")}']", nsMgr);
                     else
                         node = manifest.xml.SelectSingleNode("/ns:manifest/ns:bootstrapInfo", nsMgr);
                     if (node != null)
                     {
                         if (AttrExist(node, "url"))
                         {
-                            mediaEntry.bootstrapUrl =
-                                NormalizePath(mediaEntry.baseUrl + "/" + GetNodeProperty(node, "url"));
+                            mediaEntry.bootstrapUrl = NormalizePath(mediaEntry.baseUrl + "/" + GetNodeProperty(node, "url"));
                             HTTP cc = new HTTP();
                             if (cc.get(mediaEntry.bootstrapUrl) != 200)
                                 HdsDump.Quit("<c:Red>Failed to download bootstrap info. (Request status: <c:Magenta>" +
-                                             cc.Status + "</c>)\n\r<c:DarkCyan>bootstrapUrl: <c:DarkRed>" +
-                                             mediaEntry.bootstrapUrl);
+                                             cc.Status + "</c>)\n\r<c:DarkCyan>bootstrapUrl: <c:DarkRed>" + mediaEntry.bootstrapUrl);
                             mediaEntry.bootstrap = cc.ResponseData;
                         }
                         else
                             mediaEntry.bootstrap = Convert.FromBase64String(node.InnerText.Trim());
                     }
 
-                    node =
-                        manifest.xml.SelectSingleNode(
-                            "/ns:manifest/ns:media[@url='" + mediaEntry.url + "']/ns:metadata", nsMgr);
-                    if (node != null)
-                        mediaEntry.metadata = Convert.FromBase64String(node.InnerText.Trim());
-                    else
-                        mediaEntry.metadata = null;
+                    node = manifest.xml.SelectSingleNode($"/ns:manifest/ns:media[@url='{mediaEntry.url}']/ns:metadata", nsMgr);
+                    mediaEntry.metadata = node != null ? Convert.FromBase64String(node.InnerText.Trim()) : null;
                     media[sBitrate] = mediaEntry;
                 }
             }
@@ -793,17 +781,20 @@ namespace HDS
             // Sort quality keys - from high to low
             string[] keys = new string[media.Keys.Count];
             media.Keys.CopyTo(keys, 0);
-            Array.Sort(keys, delegate(string b, string a)
+            Array.Sort(keys, (a,b) =>
             {
                 int x = 0;
                 int y = 0;
-                if (int.TryParse(a, out x) && int.TryParse(b, out y)) return x - y;
+                if (int.TryParse(a, out x) && int.TryParse(b, out y))
+                    return x - y;
                 return a.CompareTo(b);
             });
             string sQuality = defaultQuality;
             // Quality selection
             if (media.ContainsKey(quality))
+            {
                 sQuality = quality;
+            }
             else
             {
                 quality = quality.ToLower();
@@ -893,10 +884,10 @@ namespace HDS
             byte version = ReadByte(ref bootstrapInfo, pos);
             int flags = (int) ReadInt24(ref bootstrapInfo, pos + 1);
             int bootstrapVersion = (int) ReadInt32(ref bootstrapInfo, pos + 4);
-            byte Byte = ReadByte(ref bootstrapInfo, pos + 8);
-            int profile = (Byte & 0xC0) >> 6;
-            int update = (Byte & 0x10) >> 4;
-            if ((Byte & 0x20) >> 5 > 0)
+            byte b = ReadByte(ref bootstrapInfo, pos + 8);
+            int profile = (b & 0xC0) >> 6;
+            int update = (b & 0x10) >> 4;
+            if ((b & 0x20) >> 5 > 0)
             {
                 live = true;
                 this.metadata = false;
@@ -988,18 +979,16 @@ namespace HDS
 
             pos += 9;
             for (int i = 0; i < qualityEntryCount; i++)
-            {
                 _qualitySegmentUrlModifiers.Add(ReadString(ref afrt, ref pos));
-            }
+
             int fragEntries = (int) ReadInt32(ref afrt, pos);
             pos += 4;
             HdsDump.DebugLog($" {"Number",-8}{"Timestamp",-16}{"Duration",-16}{"Discontinuity",-16}");
             for (int i = 0; i < fragEntries; i++)
             {
-                int firstFragment = (int) ReadInt32(ref afrt, pos);
                 Fragment fragEntry = new Fragment
                 {
-                    firstFragment = firstFragment,
+                    firstFragment = (int)ReadInt32(ref afrt, pos),
                     firstFragmentTimestamp = ReadInt64(ref afrt, pos + 4),
                     fragmentDuration = (int) ReadInt32(ref afrt, pos + 12),
                     discontinuityIndicator = 0
@@ -1018,14 +1007,15 @@ namespace HDS
 
         private void ParseSegAndFragTable()
         {
-            if ((segTable.Count == 0) || (fragTable.Count == 0)) return;
+            if (segTable.Count == 0 || fragTable.Count == 0)
+                return;
             Segment firstSegment = segTable[0];
             Segment lastSegment = segTable[segTable.Count - 1];
             Fragment firstFragment = fragTable[0];
             Fragment lastFragment = fragTable[fragTable.Count - 1];
 
             // Check if live stream is still live
-            if ((lastFragment.fragmentDuration == 0) && (lastFragment.discontinuityIndicator == 0))
+            if (lastFragment.fragmentDuration == 0 && lastFragment.discontinuityIndicator == 0)
             {
                 live = false;
                 if (fragTable.Count > 0)
@@ -1134,7 +1124,8 @@ namespace HDS
 
         public int GetSegmentFromFragment(int fragN)
         {
-            if ((segTable.Count == 0) || (fragTable.Count == 0)) return 1;
+            if (segTable.Count == 0 || fragTable.Count == 0)
+                return 1;
             Segment firstSegment = segTable[0];
             Segment lastSegment = segTable[segTable.Count - 1];
             Fragment firstFragment = fragTable[0];
@@ -1161,25 +1152,21 @@ namespace HDS
 
         public void CheckLastTSExistingFile()
         {
-            if (!File.Exists(outFile)) return;
-            int b1, b2, b3, b4;
+            if (!File.Exists(outFile))
+                return;
             using (FileStream fs = new FileStream(outFile, FileMode.Open))
             {
                 if (fs.Length > 600)
                 {
-                    fs.Position = fs.Length - 4;
-                    b1 = fs.ReadByte();
-                    b2 = fs.ReadByte();
-                    b3 = fs.ReadByte();
-                    b4 = fs.ReadByte();
-                    int blockLength = b2*256*256 + b3*256 + b4;
+                    // WHY
+                    //fs.Position = fs.Length - 4;
+                    //fs.ReadByte();
+                    fs.Seek(-3, SeekOrigin.End);
+                    int blockLength = (fs.ReadByte() << 16) + (fs.ReadByte() << 8) + fs.ReadByte();
                     if (fs.Length - blockLength > 600)
                     {
                         fs.Position = fs.Length - blockLength;
-                        b1 = fs.ReadByte();
-                        b2 = fs.ReadByte();
-                        b3 = fs.ReadByte();
-                        fromTimestamp = b1*256*256 + b2*256 + b3;
+                        fromTimestamp = (fs.ReadByte() << 16) + (fs.ReadByte() << 8) + fs.ReadByte();
                         FLVHeaderWritten = true;
                         FLVContinue = true;
                         HdsDump.DebugLog("Continue downloading with exiting file from timestamp: " + fromTimestamp);
@@ -1188,7 +1175,7 @@ namespace HDS
             }
         }
         
-        public IEnumerable<DownloadedFragmentArgs> DownloadFragments(   )
+        public IEnumerable<DownloadedFragmentArgs> DownloadFragments()
         {
             HTTP cc = new HTTP(!HdsDump.fproxy);
             ParseManifest(manifestUrl);
@@ -1206,7 +1193,7 @@ namespace HDS
             string sDuration = "";
             int downloaded = 0;
             filesize = 0;
-            bool usedThreads = (threads > 1) && !live;
+            bool usedThreads = threads > 1;
             int retCode;
             byte[] fragmentData = new byte[0];
             lastFrag = fragNum;
@@ -1241,9 +1228,8 @@ namespace HDS
             {
                 fragNum++;
                 segNum = GetSegmentFromFragment(fragNum);
-
-                //if (this.duration > 0) 
-                int ts = (int) Math.Round((double) (currentTS/1000));
+                
+                int ts = (int) Math.Round(currentTS / 1000.0);
                 sDuration = $"<c:DarkCyan>Current timestamp: </c>{ts/3600:00}:{ts/60%60:00}:{ts%60:00} ";
                 
                 TimeSpan timeRemaining = TimeSpan.FromTicks(DateTime.Now.Subtract(startTime).Ticks * (fragsToDownload - (downloaded + 1)) / (downloaded + 1));
@@ -1253,7 +1239,9 @@ namespace HDS
                 HdsDump.Message($"{"Downloading <c:White>" + fragNum + "</c>/" + fragCount + " fragments",-46} {sDuration}{remaining}\r");
                 int fragIndex = FindFragmentInTabe(fragNum);
                 if (fragIndex >= 0)
+                {
                     discontinuity = fragTable[fragIndex].discontinuityIndicator;
+                }
                 else
                 {
                     // search closest
@@ -1309,50 +1297,38 @@ namespace HDS
 
                 WriteFragment(ref fragmentData, fragNum);
 
-                /* Resync with latest available fragment when we are left behind due to slow *
-                 * connection and short live window on streaming server. make sure to reset  *
-                 * the last written fragment.                                                */
-                if (live && (fragNum >= fragCount))
-                {
-                    HdsDump.DebugLog("Trying to resync with latest available fragment");
-                    UpdateBootstrapInfo(bootstrapUrl);
-                    fragNum = fragCount - 1;
-                    lastFrag = fragNum;
-                }
                 downloaded++;
-                HdsDump.DebugLog("Downloaded: serment=" + segNum + " fragment=" + fragNum + "/" + fragCount +
-                                 " lenght: " + fragmentData.Length);
+                HdsDump.DebugLog($"Downloaded: segment={segNum} fragment={fragNum}/{fragCount} lenght: {fragmentData.Length}");
                 fragmentData = null;
-                if (usedThreads) Fragments2Download[fragNum - 1].data = null;
-                if ((duration > 0) && (currentDuration >= duration)) break;
-                if ((filesize > 0) && (currentFilesize >= filesize)) break;
+                if (usedThreads)
+                    Fragments2Download[fragNum - 1].data = null;
+                if (duration > 0 && currentDuration >= duration || filesize > 0 && currentFilesize >= filesize) 
+                    break;
             }
-            sDuration =
-                $"\n<c:DarkCyan>Downloaded duration: </c>{currentDuration/3600:00}:{currentDuration/60%60:00}:{currentDuration%60:00} ";
+            sDuration = $"\n<c:DarkCyan>Downloaded duration: </c>{currentDuration/3600:00}:{currentDuration/60%60:00}:{currentDuration%60:00} ";
             HdsDump.Message(sDuration);
             HdsDump.DebugLog("\nAll fragments downloaded successfully.");
         }
 
         private static byte[] ConvertHexStringToByteArray(string hexString)
         {
-            byte[] HexAsBytes = new byte[hexString.Length/2];
-            for (int index = 0; index < HexAsBytes.Length; index++)
-            {
-                string byteValue = hexString.Substring(index*2, 2);
-                HexAsBytes[index] = byte.Parse(byteValue, NumberStyles.HexNumber);
-            }
-            return HexAsBytes;
+            byte[] res = new byte[hexString.Length/2];
+            for (int i = 0; i < res.Length; i++)
+                res[i] = byte.Parse(hexString.Substring(i * 2, 2), NumberStyles.HexNumber);
+            return res;
         }
 
         [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern SafeFileHandle CreateFile(
+        public static extern SafeFileHandle CreateFile
+        (
             string pipeName,
             uint dwDesiredAccess,
             uint dwShareMode,
             IntPtr lpSecurityAttributes,
             uint dwCreationDisposition,
             uint dwFlagsAndAttributes,
-            IntPtr hTemplate);
+            IntPtr hTemplate
+        );
 
         private void Write2File(ref byte[] data, FileMode fileMode = FileMode.Append, long pos = 0, long datalen = 0)
         {
@@ -1384,11 +1360,10 @@ namespace HDS
         {
             filesize = 0;
             byte[] flvHeader = ConvertHexStringToByteArray("464c5601050000000900000000");
-            if (!video || !audio)
-                if (audio & !video)
-                    flvHeader[4] = 0x04;
-                else if (video & !audio)
-                    flvHeader[4] = 0x01;
+            if (audio && !video)
+                flvHeader[4] = 0x04;
+            else if (video && !audio)
+                flvHeader[4] = 0x01;
 
             Write2File(ref flvHeader, FileMode.Create);
             if (metadata)
@@ -1416,7 +1391,8 @@ namespace HDS
 
         private void WriteFragment(ref byte[] data, int fragNum)
         {
-            if (data == null) return;
+            if (data == null)
+                return;
             if (!FLVHeaderWritten)
             {
                 InitDecoder();
@@ -1456,7 +1432,8 @@ namespace HDS
 
         private void DecodeFragment(ref byte[] frag, bool notWrite = false)
         {
-            if (frag == null) return;
+            if (frag == null)
+                return;
             string boxType = "";
             long boxSize = 0;
             long fragLen = frag.Length;
@@ -1488,17 +1465,17 @@ namespace HDS
                 packetTS = ReadInt24(ref frag, fragPos + 4);
                 packetTS = (uint) packetTS | (uint) (ReadByte(ref frag, fragPos + 7) << 24);
 
-                if ((packetTS & 0x80000000) == 0) packetTS &= 0x7FFFFFFF;
+                if ((packetTS & 0x80000000) == 0)
+                    packetTS &= 0x7FFFFFFF;
                 long totalTagLen = tagHeaderLen + packetSize + prevTagSize;
 
                 // Try to fix the odd timestamps and make them zero based
                 currentTS = packetTS;
                 lastTS = prevVideoTS >= prevAudioTS ? prevVideoTS : prevAudioTS;
                 fixedTS = lastTS + Constants.FRAMEFIX_STEP;
-                if ((baseTS == Constants.INVALID_TIMESTAMP) &&
-                    ((packetType == Constants.AUDIO) || (packetType == Constants.VIDEO)))
+                if (baseTS == Constants.INVALID_TIMESTAMP && (packetType == Constants.AUDIO || packetType == Constants.VIDEO))
                     baseTS = packetTS;
-                if ((baseTS > 1000) && (packetTS >= baseTS))
+                if (baseTS > 1000 && packetTS >= baseTS)
                     packetTS -= baseTS;
 
                 if (lastTS != Constants.INVALID_TIMESTAMP)
@@ -1506,8 +1483,7 @@ namespace HDS
                     long timeShift = packetTS - lastTS;
                     if (timeShift > fixWindow)
                     {
-                        HdsDump.DebugLog(
-                            $"Timestamp gap detected: PacketTS={packetTS} LastTS={lastTS} Timeshift={timeShift}");
+                        HdsDump.DebugLog($"Timestamp gap detected: PacketTS={packetTS} LastTS={lastTS} Timeshift={timeShift}");
                         baseTS += timeShift - Constants.FRAMEFIX_STEP;
                         packetTS = fixedTS;
                     }
@@ -1516,13 +1492,12 @@ namespace HDS
                         lastTS = packetType == Constants.VIDEO ? prevVideoTS : prevAudioTS;
                         if (packetTS < lastTS - fixWindow)
                         {
-                            if ((negTS != Constants.INVALID_TIMESTAMP) && (packetTS + negTS < lastTS - fixWindow))
+                            if (negTS != Constants.INVALID_TIMESTAMP && packetTS + negTS < lastTS - fixWindow)
                                 negTS = Constants.INVALID_TIMESTAMP;
                             if (negTS == Constants.INVALID_TIMESTAMP)
                             {
                                 negTS = (int) (fixedTS - packetTS);
-                                HdsDump.DebugLog(
-                                    $"Negative timestamp detected: PacketTS={packetTS} LastTS={lastTS} NegativeTS={negTS}");
+                                HdsDump.DebugLog($"Negative timestamp detected: PacketTS={packetTS} LastTS={lastTS} NegativeTS={negTS}");
                                 packetTS = fixedTS;
                             }
                             else
@@ -1532,8 +1507,7 @@ namespace HDS
                                 else
                                 {
                                     negTS = (int) (fixedTS - packetTS);
-                                    HdsDump.DebugLog(
-                                        $"Negative timestamp override: PacketTS={packetTS} LastTS={lastTS} NegativeTS={negTS}");
+                                    HdsDump.DebugLog($"Negative timestamp override: PacketTS={packetTS} LastTS={lastTS} NegativeTS={negTS}");
                                     packetTS = fixedTS;
                                 }
                             }
