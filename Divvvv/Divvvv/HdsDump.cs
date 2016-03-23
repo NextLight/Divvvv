@@ -999,8 +999,8 @@ namespace HDS
                 fragTable.Add(fragEntry);
                 HdsDump.DebugLog($"{fragEntry.firstFragment,-8}{fragEntry.firstFragmentTimestamp,-16}{fragEntry.fragmentDuration,-16}{fragEntry.discontinuityIndicator,-16}");
 
-                if (fromTimestamp > 0 && fragEntry.firstFragmentTimestamp > 0 && fragEntry.firstFragmentTimestamp < fromTimestamp)
-                    start = fragEntry.firstFragment + 1;
+                if (fragEntry.fragmentDuration != 0 && fromTimestamp > fragEntry.firstFragmentTimestamp)
+                    start = fragEntry.firstFragment + (int)((fromTimestamp - fragEntry.firstFragmentTimestamp) / fragEntry.fragmentDuration);
             }
             HdsDump.DebugLog("");
         }
