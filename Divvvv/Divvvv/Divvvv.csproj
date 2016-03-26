@@ -82,6 +82,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="BoxReader.cs" />
     <Compile Include="Stuff.cs" />
     <Compile Include="User.cs" />
     <Page Include="MainWindow.xaml">
