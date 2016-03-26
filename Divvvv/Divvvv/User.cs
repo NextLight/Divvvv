@@ -6,7 +6,6 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
-using HDS;
 
 namespace Divvvv
 {
@@ -115,27 +114,27 @@ namespace Divvvv
             {
                 if (!Directory.Exists(ShowTitle))
                     Directory.CreateDirectory(ShowTitle);
-                _hds = new HdsDump(_manifestLink, string.Format("{0}\\{0} {1} - {2}.mp4", ShowTitle, EpNumber, EpTitle), true);
-                _hds.DownloadedFragment += Program_DownloadedFragment;
-                _hds.DownloadedFile += Program_DownloadedFile;
-                await Task.Run(() => _hds.Start());
+                _hds = new HdsDump(_manifestLink, string.Format("{0}\\{0} {1} - {2}.mp4", ShowTitle, EpNumber, EpTitle));
+                //_hds.DownloadedFragment += Program_DownloadedFragment;
+                //_hds.DownloadedFile += Program_DownloadedFile;
+                await _hds.Start();
             }
             else
             {
-                _hds.DownloadedFragment -= Program_DownloadedFragment;
-                _hds.Close();
+                //_hds.DownloadedFragment -= Program_DownloadedFragment;
+                //_hds.Close();
             }
         }
 
-        private void Program_DownloadedFragment(object sender, DownloadedFragmentArgs e)
+        private void Program_DownloadedFragment(object sender, EventArgs e)//DownloadedFragmentArgs e)
         {
-            Percentage = e.Downloaded * 100 / e.FragmentsCount;
-            TimeRemaining = e.TimeRemaining;
+            //Percentage = e.Downloaded * 100 / e.FragmentsCount;
+            //TimeRemaining = e.TimeRemaining;
         }
 
         private void Program_DownloadedFile(object sender, EventArgs e)
         {
-            _hds.DownloadedFile -= Program_DownloadedFile;
+            //_hds.DownloadedFile -= Program_DownloadedFile;
             Percentage = 0;
             TimeRemaining = new TimeSpan();
             IsDownloading = false;
