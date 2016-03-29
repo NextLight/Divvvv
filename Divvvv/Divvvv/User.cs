@@ -16,7 +16,7 @@ namespace Divvvv
         private readonly string _connId;
         public User()
         {
-            _connId = Stuff.JsonValue(Stuff.GetHtmlPage("http://www.vvvvid.it/user/login"), "conn_id");
+            _connId = Json.Value(Web.DownloadString("http://www.vvvvid.it/user/login"), "conn_id");
             SyncShowsDictionary();
         }
 
@@ -24,11 +24,11 @@ namespace Divvvv
         {
             Parallel.For('a', 'z' + 1, async c =>
             {
-                string json = await Stuff.GetHtmlPageAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003/last?filter={c}&conn_id=" + _connId);
+                string json = await Web.DownloadStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003/last?filter={c}&conn_id=" + _connId);
                 if (json.Contains("\"data\""))
                 {
                     string s;
-                    while ((s = await Stuff.GetHtmlPageAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003?filter={c}&conn_id=" + _connId)).Contains("\"data\""))
+                    while ((s = await Web.DownloadStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003?filter={c}&conn_id=" + _connId)).Contains("\"data\""))
                         json += s;
                     foreach (Json j in json.Split("},{"))
                         ShowsDictionary[j["title"].Unescape()] = j["show_id"];
@@ -51,7 +51,7 @@ namespace Divvvv
         public async Task<Show> GetShow(string showId, string serieId)
         {
             if (string.IsNullOrEmpty(serieId))
-                serieId = Stuff.JsonValue(await Stuff.GetHtmlPageAsync($"http://www.vvvvid.it/vvvvid/ondemand/{showId}/seasons/?conn_id=" + _connId), "season_id");
+                serieId = Json.Value(await Web.DownloadStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/{showId}/seasons/?conn_id=" + _connId), "season_id");
             return new Show(showId, serieId, _connId);
         }
     }
@@ -68,8 +68,8 @@ namespace Divvvv
 
         private void Init(string showId, string serieId, string connId)
         {
-            var json = Stuff.GetHtmlPage($"http://www.vvvvid.it/vvvvid/ondemand/{showId}/season/{serieId}?conn_id=" + connId);
-            ShowTitle = Stuff.JsonValue(json, "show_title");
+            var json = Web.DownloadString($"http://www.vvvvid.it/vvvvid/ondemand/{showId}/season/{serieId}?conn_id=" + connId);
+            ShowTitle = Json.Value(json, "show_title");
             Episodes = json.Split("},{").Select(s => new Json(s)).Select(j =>
                   new Episode(
                       ShowTitle,
@@ -91,7 +91,8 @@ namespace Divvvv
             EpNumber = epNumber;
             EpTitle = epTitle;
             Thumb = thumbLink == "" ? new BitmapImage() : new BitmapImage(new Uri("http://" + thumbLink.ReMatch(@"\/\/(.+)")));
-            _manifestLink = manifestLink.Contains("akamaihd") ? manifestLink + "?hdcore=3.6.0" : $"http://wowzaondemand.top-ix.org/videomg/_definst_/mp4:{manifestLink}/manifest.f4m"; ;
+            _manifestLink = manifestLink.Contains("akamaihd") ? manifestLink + "?hdcore=3.6.0" : $"http://wowzaondemand.top-ix.org/videomg/_definst_/mp4:{manifestLink}/manifest.f4m";
+
         }
 
         private bool _isDownloading;
@@ -114,15 +115,15 @@ namespace Divvvv
             {
                 if (!Directory.Exists(ShowTitle))
                     Directory.CreateDirectory(ShowTitle);
-                _hds = new HdsDump(_manifestLink, string.Format("{0}\\{0} {1} - {2}.mp4", ShowTitle, EpNumber, EpTitle));
+                _hds = new HdsDump(_manifestLink, string.Format("{0}\\{0} {1} - {2}.flv", ShowTitle, EpNumber, EpTitle));
                 //_hds.DownloadedFragment += Program_DownloadedFragment;
-                //_hds.DownloadedFile += Program_DownloadedFile;
+                _hds.DownloadedFile += Program_DownloadedFile;
                 await _hds.Start();
             }
             else
             {
                 //_hds.DownloadedFragment -= Program_DownloadedFragment;
-                //_hds.Close();
+               _hds.Close();
             }
         }
 
@@ -134,7 +135,7 @@ namespace Divvvv
 
         private void Program_DownloadedFile(object sender, EventArgs e)
         {
-            //_hds.DownloadedFile -= Program_DownloadedFile;
+            _hds.DownloadedFile -= Program_DownloadedFile;
             Percentage = 0;
             TimeRemaining = new TimeSpan();
             IsDownloading = false;

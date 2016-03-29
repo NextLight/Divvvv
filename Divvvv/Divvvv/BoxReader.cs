@@ -11,6 +11,8 @@
             _buffer = buffer;
         }
 
+        public int Position => (int)_pos;
+
         public byte ReadByte() => _buffer[_pos++];
 
         public uint ReadUInt32() =>

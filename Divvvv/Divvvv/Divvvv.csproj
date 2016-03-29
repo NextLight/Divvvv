@@ -83,6 +83,8 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="BoxReader.cs" />
+    <Compile Include="F4m.cs" />
+    <Compile Include="FlvWriter.cs" />
     <Compile Include="Stuff.cs" />
     <Compile Include="User.cs" />
     <Page Include="MainWindow.xaml">
