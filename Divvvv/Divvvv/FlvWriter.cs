@@ -86,8 +86,8 @@ namespace Divvvv
         public async Task WriteFragmentAsync(byte[] frag)
         {
             var br = new BoxReader(frag);
-            br.SkipBox(); // abst
-            br.SkipBox(); // mdat
+            while (br.GetBoxType() != "mdat")
+                br.SkipBox();
             br.SkipBoxHeader();
             await _fs.WriteAsync(frag, br.Position, frag.Length - br.Position);
         }

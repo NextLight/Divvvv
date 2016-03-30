@@ -22,6 +22,16 @@
             (ulong) (ReadByte() << 0x38 | ReadByte() << 0x30 | ReadByte() << 0x28 | ReadByte() << 0x20 |
                      ReadByte() << 0x18 | ReadByte() << 0x10 | ReadByte() << 0x08 | ReadByte());
 
+        public string GetBoxType()
+        {
+            var spos = _pos;
+            if (ReadUInt32() == 1)
+                Skip(8);
+            string s = System.Text.Encoding.Default.GetString(_buffer, (int)_pos, 4);
+            _pos = spos;
+            return s;
+        }
+
         public void Skip(long n) => _pos += n;
 
         public void SkipString()
