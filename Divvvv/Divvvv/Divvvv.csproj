@@ -85,8 +85,15 @@
     <Compile Include="BoxReader.cs" />
     <Compile Include="F4m.cs" />
     <Compile Include="FlvWriter.cs" />
+    <Compile Include="ListEpisodes.xaml.cs">
+      <DependentUpon>ListEpisodes.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Stuff.cs" />
     <Compile Include="User.cs" />
+    <Page Include="ListEpisodes.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>

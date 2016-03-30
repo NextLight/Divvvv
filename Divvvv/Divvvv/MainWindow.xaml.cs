@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -18,16 +19,14 @@ namespace Divvvv
         private async void button_Click(object sender, RoutedEventArgs e)
         {
             txtTitle.CaretIndex = txtTitle.Text.Length;
-            string match = txtTitle.Text.ReMatch(@"https?:\/\/(.*?)\/?$");
-            string showId, serieId = null;
-            if (!string.IsNullOrEmpty(match))
+            string matchLink = txtTitle.Text.ReMatch(@"https?://(.*?)/?$");
+            string showId;
+            if (!string.IsNullOrEmpty(matchLink))
             {
-                string[] urlSplit = match.Split('/');
-                if (urlSplit.Length < 4 || !match.Contains("vvvvid") || !urlSplit[2].IsInt())
+                string[] urlSplit = matchLink.Split('/');
+                if (urlSplit.Length < 4 || !matchLink.Contains("vvvvid") || !urlSplit[2].IsInt())
                     return;
                 showId = urlSplit[2];
-                if (urlSplit.Length > 6 && urlSplit[4].IsInt())
-                    serieId = urlSplit[4];
             }
             else
             {
@@ -35,14 +34,12 @@ namespace Divvvv
                     return;
                 showId = user.ShowsDictionary[txtTitle.Text];
             }
-            var show = await user.GetShow(showId, serieId);
-            lstEpisodes.ItemsSource = show.Episodes;
+            var show = await user.GetShow(showId);
             lblTitle.Content = show.ShowTitle;
+            tabSeries.ItemsSource = show.Series.Select(s => new TabItem { Header = s.Name, Content = new ListEpisodes(s.Episodes) });
+            tabSeries.SelectedIndex = 0;
             txtTitle.Focus();
         }
-
-        private void btnDownload_Click(object sender, RoutedEventArgs e) =>
-            ((Episode) ((Button) sender).DataContext).Download();
 
         private void txtTitle_TextChanged(object sender, TextChangedEventArgs e)
         {

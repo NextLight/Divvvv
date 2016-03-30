@@ -30,8 +30,11 @@ namespace Divvvv
 
         public static string ReMatch(this string s, string re, int groupIdx = 1) => Regex.Match(s, re).Groups[groupIdx].Value;
 
-        public static IEnumerable<string> ReMatches(this string s, string re, int groupIdx = 1) => 
+        public static IEnumerable<string> ReMatches(this string s, string re, int groupIdx = 1) =>
             Regex.Matches(s, re).Cast<Match>().Select(m => m.Groups[groupIdx].Value);
+
+        public static IEnumerable<string[]> ReMatchesGroups(this string s, string re) =>
+            Regex.Matches(s, re).Cast<Match>().Select(m => m.Groups.Cast<Group>().Select(g => g.Value).ToArray());
     }
 
     public static class Web
@@ -90,6 +93,8 @@ namespace Divvvv
         public static string Value(string json, string key) => json.ReMatch($"\"{key}\":" + "(\")?(.*?)(?(1)\")[,}]", 2);
 
         public static implicit operator Json(string s) => new Json(s);
+
+        public override string ToString() => _json;
     }
 
     // just because

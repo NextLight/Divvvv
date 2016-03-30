@@ -48,40 +48,55 @@ namespace Divvvv
             return m;
         }
 
-        public async Task<Show> GetShow(string showId, string serieId)
+        public async Task<Show> GetShow(string showId)
         {
-            if (string.IsNullOrEmpty(serieId))
-                serieId = Json.Value(await Web.DownloadStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/{showId}/seasons/?conn_id=" + _connId), "season_id");
-            return new Show(showId, serieId, _connId);
+            Serie[] series = (await Web.DownloadStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/{showId}/seasons/?conn_id=" + _connId))
+                .ReMatchesGroups("\"season_id\":(.+?),.*?\"name\":\"(.+?)\"").Select(g => new Serie { Name = g[2], Id = g[1] }).ToArray();
+            return new Show(showId, series, _connId);
         }
     }
+
+    class Serie { public string Name, Id; public IEnumerable<Episode> Episodes; }
 
     class Show
     {
-        public Show(string showId, string serieId, string connId)
+        private readonly string _connId, _showId;
+
+        public Show(string showId, Serie[] series, string connId)
         {
-            Init(showId, serieId, connId);
+            _showId = showId;
+            Series = series;
+            _connId = connId;
+            GetSeriesEpisodes();
         }
 
-        public string ShowTitle { get; private set; }
-        public IEnumerable<Episode> Episodes { get; private set; }
+        public string ShowTitle { get; private set; } = null;
+        public Serie[] Series { get; }
 
-        private void Init(string showId, string serieId, string connId)
+        private void GetSeriesEpisodes()
         {
-            var json = Web.DownloadString($"http://www.vvvvid.it/vvvvid/ondemand/{showId}/season/{serieId}?conn_id=" + connId);
-            ShowTitle = Json.Value(json, "show_title");
-            Episodes = json.Split("},{").Select(s => new Json(s)).Select(j =>
-                  new Episode(
-                      ShowTitle,
-                      j["embed_info"].Replace("master.m3u8", "manifest.f4m").Replace("/i/", "/z/"),
-                      j["number"],
-                      j["title"].Unescape().Replace('\n', ' '),
-                      j["thumbnail"]
-                  ));
+            foreach (var s in Series)
+                s.Episodes = DownloadSerieEpisodes(s.Id);
+        }
+
+        private IEnumerable<Episode> DownloadSerieEpisodes(string serieId)
+        {
+            Json js = Web.DownloadString($"http://www.vvvvid.it/vvvvid/ondemand/{_showId}/season/{serieId}?conn_id=" + _connId);
+            if (ShowTitle == null)
+                ShowTitle = js["show_title"];
+            return js.ToString().Split("},{").Select(s => new Json(s)).Select(j =>
+                new Episode(
+                    ShowTitle,
+                    j["embed_info"].Replace("master.m3u8", "manifest.f4m").Replace("/i/", "/z/"),
+                    j["number"],
+                    j["title"].Unescape().Replace('\n', ' '),
+                    j["thumbnail"]
+                )
+            );
         }
     }
 
-    class Episode : INotifyPropertyChanged
+    public class Episode : INotifyPropertyChanged
     {
         private readonly string _manifestLink;
 
@@ -124,7 +139,7 @@ namespace Divvvv
             else
             {
                 //_hds.DownloadedFragment -= Program_DownloadedFragment;
-               _hds.Close();
+                _hds.Close();
             }
         }
 
