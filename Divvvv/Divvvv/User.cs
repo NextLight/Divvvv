@@ -46,7 +46,7 @@ namespace Divvvv
                 return c == 0 ? s1.CompareTo(s2) : c;
             });
             return m;
-        } 
+        }
 
         public async Task<Show> GetShow(string showId, string serieId)
         {
@@ -115,7 +115,8 @@ namespace Divvvv
             {
                 if (!Directory.Exists(ShowTitle))
                     Directory.CreateDirectory(ShowTitle);
-                _hds = new HdsDump(_manifestLink, string.Format("{0}\\{0} {1} - {2}.flv", ShowTitle, EpNumber, EpTitle));
+                string fileName = string.Format("{0}\\{0} {1} - {2}.flv", SanitizeFileName(ShowTitle), EpNumber, SanitizeFileName(EpTitle));
+                _hds = new HdsDump(_manifestLink, fileName);
                 //_hds.DownloadedFragment += Program_DownloadedFragment;
                 _hds.DownloadedFile += Program_DownloadedFile;
                 await _hds.Start();
@@ -140,6 +141,8 @@ namespace Divvvv
             TimeRemaining = new TimeSpan();
             IsDownloading = false;
         }
+
+        private string SanitizeFileName(string fileName) => string.Join("", fileName.Split(Path.GetInvalidFileNameChars()));
 
         public event PropertyChangedEventHandler PropertyChanged;
 
