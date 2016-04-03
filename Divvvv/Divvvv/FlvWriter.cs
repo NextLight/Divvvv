@@ -25,8 +25,6 @@ namespace Divvvv
                 }
                 else
                 {
-                    _fs.Seek(3, SeekOrigin.Current);
-                    LastTimestamp = ReadInt24() | ReadByte() << 0x18; // the 4th byte is the most significant
                     _fs.Seek(13, SeekOrigin.Begin);
                     if (ReadByte() != 0x12) // bad flv file (?)
                     {
@@ -61,8 +59,6 @@ namespace Divvvv
 
         public bool Resuming { get; }
 
-        public int LastTimestamp { get; }
-
         public int Duration { get; }
 
 
@@ -83,16 +79,24 @@ namespace Divvvv
             WriteInt32(metadata.Length + 11);
         }
 
-        public async Task WriteFragmentAsync(byte[] frag)
+        public async Task<bool> WriteFragmentAsync(byte[] frag)
         {
             var br = new BoxReader(frag);
             while (br.GetBoxType() != "mdat")
                 br.SkipBox();
             br.SkipBoxHeader();
+
+            br.Skip(4);
+            int tsFrag = br.ReadByte() << 0x10 | br.ReadByte() << 0x8 | br.ReadByte() | br.ReadByte() << 0x18;
+            br.Skip(-8);
+            if (tsFrag < GetLastTagTimestamp()) // don't write aleady written fragment.
+                return false;
+            _fs.Seek(0, SeekOrigin.End);
             await _fs.WriteAsync(frag, br.Position, frag.Length - br.Position);
+            return true;
         }
 
-        public void Close() => _fs.Close();
+        public void Close() => _fs.Dispose();
         
 
         private int ReadByte() => _fs.ReadByte();
@@ -105,10 +109,17 @@ namespace Divvvv
 
         public double ReadDouble()
         {
-            byte[] array = new byte[8];
+            var array = new byte[8];
             _fs.Read(array, 0, 8);
             return BitConverter.ToDouble(array.Reverse().ToArray(), 0); // Again, numbers are stored in big-endian so i need to reverse
         }
+
+        public int GetLastTagTimestamp()
+        {
+            _fs.Seek(-3, SeekOrigin.End);
+            _fs.Seek(-ReadInt24(), SeekOrigin.Current);
+            return ReadInt24() | ReadByte() << 0x18; // the 4th byte is the most significant
+        } 
 
         private void WriteInt24(int i)
         {

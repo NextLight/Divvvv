@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -54,14 +55,19 @@ namespace Divvvv
                 for (byte __ = 0; __ < qualitySegmentUrlModifiers; __++)
                     bootstrap.SkipString();
                 // this isn't really a segment, but whatever.
-                segment.FragmentRunTable = new FragmentRun[bootstrap.ReadUInt32()].Select(fr =>
-                    new FragmentRun
-                    {
-                        Id = bootstrap.ReadUInt32(),
-                        Timestamp = bootstrap.ReadUInt64(),
-                        Duration = bootstrap.ReadUInt32()
-                    }
-                    ).OrderBy(fr => fr.Id).ToArray();
+                var frags = new List<Fragment> { new Fragment(0, 0, 0) };
+                uint fragRuns = bootstrap.ReadUInt32();
+                for (uint __ = 0; __ < fragRuns; __++)
+                {
+                    var readFrag = new Fragment(bootstrap.ReadUInt32(), bootstrap.ReadUInt64(), bootstrap.ReadUInt32());
+                    Fragment last = frags.Last();
+                    // hopefully they are already sorted by id
+                    for (uint i = last.Id + 1; i < readFrag.Id; i++)
+                        frags.Add(last = new Fragment(i, last.TimestampEnd.TotalMilliseconds, last.Duration));
+                    if (readFrag.Id != 0)
+                        frags.Add(readFrag);
+                }
+                segment.Fragments = frags.ToArray();
             }
             return segment;
         }
@@ -75,22 +81,49 @@ namespace Divvvv
         public byte[] Metadata { get; set; }
     }
 
-    class FragmentRun : IComparable
+    class Fragment : IComparable
     {
-        public uint Id { get; set; }
-        public ulong Timestamp { get; set; }
-        public uint Duration { get; set; }
+        public uint Id { get; }
+        public TimeSpan TimestampEnd { get; }
+        public uint Duration { get; }
+
+        public Fragment(uint id, TimeSpan timestampStart, uint duration)
+        {
+            Id = id;
+            TimestampEnd = timestampStart + TimeSpan.FromMilliseconds(duration);
+            Duration = duration;
+        }
+
+        public Fragment(uint id, double timestamp, uint duration)
+            : this(id, TimeSpan.FromMilliseconds(timestamp), duration)
+        {
+        }
 
         public int CompareTo(object obj)
         {
-            return Timestamp.CompareTo(((FragmentRun)obj).Timestamp);
+            if (obj is TimeSpan)
+                return TimestampEnd.CompareTo((TimeSpan) obj);
+            throw new Exception();
         }
     }
 
     class Segment
     {
         public uint Id { get; set; }
-        public FragmentRun[] FragmentRunTable { get; set; }
+        public Fragment[] Fragments { get; set; }
+        public TimeSpan TotalTimestamp => Fragments.Last().TimestampEnd;
+        public uint FragsCount => Fragments.Last().Id;
+
+        public Fragment GetFragmentFromTimestamp(TimeSpan ts)
+        {
+            int bs = Array.BinarySearch(Fragments, ts);
+            if (bs < 0)
+                bs = ~bs;
+            return Fragments[bs];
+        }
+
+        public Fragment GetFragmentFromTimestamp(long ms) => 
+            GetFragmentFromTimestamp(TimeSpan.FromMilliseconds(ms));
     }
 
 }
