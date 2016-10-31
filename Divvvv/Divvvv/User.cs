@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 
@@ -106,8 +107,24 @@ namespace Divvvv
             EpNumber = epNumber;
             EpTitle = epTitle;
             Thumb = thumbLink == "" ? new BitmapImage() : new BitmapImage(new Uri("http://" + thumbLink.ReMatch(@"\/\/(.+)")));
+            manifestLink = DecodeManifestLink(manifestLink);
             _manifestLink = manifestLink.Contains("akamaihd") ? manifestLink + "?hdcore=3.6.0" : $"http://wowzaondemand.top-ix.org/videomg/_definst_/mp4:{manifestLink}/manifest.f4m";
+        }
 
+        string DecodeManifestLink(string h)
+        {
+            // TODO: they might change this, find a smart way to retrieve it from vvvvid.js
+            var g = "MNOPIJKL89+/4567UVWXQRSTEFGHABCDcdefYZabstuvopqr0123wxyzklmnghij";
+            var m = h.Select(c => g.IndexOf(c)).ToArray();
+            for (var i = m.Length * 2 - 1; i >= 0; i--)
+                m[i % m.Length] ^= m[(i + 1) % m.Length];
+            var sb = new StringBuilder(m.Length * 3 / 4);
+            for (int i = 0; i < m.Length; i++)
+                if (i % 4 != 0)
+                    sb.Append((char)((m[i - 1] << (i % 4) * 2 & 255) + (m[i] >> (3 - i % 4) * 2)));
+            if (m.Length % 4 == 1)
+                sb.Append((char)(m.Last() << 2));
+            return sb.ToString();
         }
 
         private bool _isDownloading;
