@@ -19,7 +19,7 @@ namespace Divvvv
 
         public async Task Connect()
         {
-            _connId = Json.Value(await HttpDownloader.GetStringAsync("http://www.vvvvid.it/user/login"), "conn_id");
+            _connId = Json.GetStringRE(await HttpDownloader.GetStringAsync("http://www.vvvvid.it/user/login"), "conn_id");
             SyncShowsDictionary();
         }
 
@@ -28,13 +28,11 @@ namespace Divvvv
             Parallel.For('a', 'z' + 1, async c =>
             {
                 string json = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003/last?filter={c}&conn_id=" + _connId);
-                if (json.Contains("\"data\""))
+                while (json?.Contains("\"data\"") == true)
                 {
-                    string s;
-                    while ((s = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003?filter={c}&conn_id=" + _connId)).Contains("\"data\""))
-                        json += s;
-                    foreach (Json j in json.Split("},{"))
-                        ShowsDictionary[j["title"].Unescape()] = j["show_id"];
+                    foreach (Dictionary<string, object> d in new Json(json).GetList("data"))
+                        ShowsDictionary[d["title"].ToString().Unescape()] = d["show_id"].ToString();
+                    json = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003?filter={c}&conn_id=" + _connId);
                 }
             });
         }
@@ -85,16 +83,17 @@ namespace Divvvv
 
         private async Task<IEnumerable<Episode>> DownloadSerieEpisodesAsync(string serieId)
         {
-            Json js = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/{_showId}/season/{serieId}?conn_id=" + _connId);
-            if (ShowTitle == null)
-                ShowTitle = js["show_title"];
-            return js.ToString().Split("},{").Select(s => new Json(s)).Select(j =>
+            var j = new Json(await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/{_showId}/season/{serieId}?conn_id=" + _connId));
+            var eps = j.GetList<Dictionary<string, object>>("data");
+            if (ShowTitle == null && eps.Any())
+                ShowTitle = eps.First()["show_title"].ToString();
+            return eps.Select(d =>
                 new Episode(
                     ShowTitle,
-                    j["embed_info"].Replace("master.m3u8", "manifest.f4m").Replace("/i/", "/z/"),
-                    j["number"],
-                    j["title"].Unescape().Replace('\n', ' '),
-                    j["thumbnail"]
+                    d["embed_info"].ToString().Replace("master.m3u8", "manifest.f4m").Replace("/i/", "/z/"),
+                    d["number"].ToString(),
+                    d["title"].ToString().Unescape().Replace('\n', ' '),
+                    d["thumbnail"].ToString()
                 )
             );
         }

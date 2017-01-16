@@ -1,7 +1,9 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Web.Script.Serialization;
 
 namespace Divvvv
 {
@@ -39,21 +41,29 @@ namespace Divvvv
 
     public class Json
     {
-        private readonly string _json;
+        private readonly static JavaScriptSerializer _serializer;
+        static Json()
+        {
+            _serializer = new JavaScriptSerializer();
+        }
+        
+        private readonly Dictionary<string, object> _dictionary;
         public Json(string s)
         {
-            _json = s;
+            _dictionary = _serializer.Deserialize<Dictionary<string, object>>(s);
         }
 
-        public string this[string key] => Value(key);
+        public object this[string key] => Get(key);
 
-        public string Value(string key) => Value(_json, key);
+        public object Get(string key) => _dictionary[key];
 
-        public static string Value(string json, string key) => json.ReMatch($"\"{key}\":" + "(\")?(.*?)(?(1)\")[,}]", 2);
+        public T Get<T>(string key) => (T)Get(key);
 
-        public static implicit operator Json(string s) => new Json(s);
+        public ArrayList GetList(string key) => Get<ArrayList>(key);
 
-        public override string ToString() => _json;
+        public IEnumerable<T> GetList<T>(string key) => Get<ArrayList>(key).Cast<T>();
+
+        public static string GetStringRE(string json, string key) => json.ReMatch($"\"{key}\":" + "(\")?(.*?)(?(1)\")[,}]", 2);
     }
 
     // just because
