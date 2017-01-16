@@ -9,12 +9,14 @@ namespace Divvvv
     {
         public static async Task<Media> GetMediaFromManifestUrl(string manifestUrl)
         {
-            XmlNode xmlManifest = await Web.DownloadStringAsync(manifestUrl);
+            XmlNode xmlManifest = await HttpDownloader.GetStringAsync(manifestUrl);
             // pick media with higher bitrate (i.e. better quality)
             XmlNode xmlMedia = xmlManifest.Nodes.Where(x => x.Tag == "media").MaxBy(x => int.Parse(x["bitrate"]));
+            var ulrMatches = manifestUrl.ReMatchGroups(@"(^https?://[a-zA-Z-0-9\-\.]+?/)(.+)/");
             return new Media
             {
-                BaseUrl = manifestUrl.Substring(0, manifestUrl.LastIndexOf('/')),
+                Domain = ulrMatches[1],
+                BaseUrl = ulrMatches[2],
                 MediaUrl = xmlMedia["url"],
                 BootstrapInfo = Convert.FromBase64String(xmlManifest.Nodes.First(x => x.Tag == "bootstrapInfo" && x["id"] == xmlMedia["bootstrapInfoId"]).InnerString),
                 Metadata = Convert.FromBase64String(xmlMedia.Nodes.First().InnerString)
@@ -75,13 +77,14 @@ namespace Divvvv
 
     class Media
     {
+        public string Domain { get; internal set; }
         public string BaseUrl { get; set; }
         public string MediaUrl { get; set; }
         public byte[] BootstrapInfo { get; set; }
         public byte[] Metadata { get; set; }
     }
 
-    class Fragment : IComparable
+    public class Fragment : IComparable
     {
         public uint Id { get; }
         public TimeSpan TimestampEnd { get; }

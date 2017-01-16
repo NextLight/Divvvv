@@ -1,68 +1,103 @@
 ﻿using System;
-using System.Linq;
-using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Divvvv
 {
-    class HdsDump
+    public class HdsDump
     {
         private readonly string _manifestUrl;
         private readonly FlvWriter _flv;
-        private readonly WebClient _web;
-        private bool _downloaded = false;
-        private bool _close = false;
+        private Media _media;
+        private Segment _segment;
+        private bool _stop = true;
+        private CancellationTokenSource _cts;
         public HdsDump(string manifest, string fileName)
         {
             _manifestUrl = manifest;
             _flv = new FlvWriter(fileName);
             if (_flv.Resuming)
-                _downloaded = Math.Abs(_flv.Duration - _flv.GetLastTagTimestamp()) < 1000;
-            _web = new WebClient();
+                Status = Math.Abs(_flv.Duration - _flv.GetLastTagTimestamp()) < 1000 ? DownloadStatus.Downloaded : DownloadStatus.Paused;
         }
 
+        public enum DownloadStatus { Nope, Paused, Downloading, Downloaded }
 
-        public bool Resuming => _flv.Resuming;
+        private DownloadStatus _status;
+        public DownloadStatus Status { get { return _status; } private set { _status = value; DownloadStatusChanged?.Invoke(this, null); } }
 
-        public bool Downloaded => _downloaded;
+        public Fragment LastDownloadedFragment { get; private set; }
 
-        public event EventHandler DownloadedFile;
+        public int FragmentsCount { get; private set; }
 
+        public event EventHandler DownloadedFragment;
+        public event EventHandler DownloadStatusChanged;
 
+        private Task _writeTask = Task.Run(() => 0);
         public async Task Start()
         {
-            Media media = await F4m.GetMediaFromManifestUrl(_manifestUrl);
-            if (!_flv.Resuming)
-                await _flv.Create(media.Metadata);
-            Segment segment = F4m.GetSegmentFromBootstrapInfo(media.BootstrapInfo);
+            if (Status == DownloadStatus.Downloading || Status == DownloadStatus.Downloaded)
+                return;
+            Status = DownloadStatus.Downloading;
+            _stop = false;
+            _cts = new CancellationTokenSource();
+            if (_media == null)
+                _media = await F4m.GetMediaFromManifestUrl(_manifestUrl);
+            if (_segment == null)
+                _segment = F4m.GetSegmentFromBootstrapInfo(_media.BootstrapInfo);
+            FragmentsCount = (int)_segment.FragsCount;
+            if (!_flv.IsOpen)
+                await _flv.Create(_media.Metadata);
+
             uint fragId = 1;
             if (_flv.Resuming)
+                fragId = _segment.GetFragmentFromTimestamp(_flv.GetLastTagTimestamp()).Id;
+            if (fragId > 1)
             {
-                fragId = segment.GetFragmentFromTimestamp(_flv.GetLastTagTimestamp()).Id;
+                LastDownloadedFragment = _segment.Fragments[fragId - 1];
+                DownloadedFragment?.Invoke(this, null);
             }
-            for (; fragId <= segment.FragsCount && !_close; fragId++)
+            
+            for (; fragId <= _segment.FragsCount && !_stop; fragId++)
             {
-                string url = $"{media.BaseUrl}/{media.MediaUrl}Seg{segment.Id}-Frag{fragId}";
-                byte[] frag = await _web.DownloadDataTaskAsync(url); // TODO: better async
-                if (!_close)
+                string url = $"/{_media.BaseUrl}/{_media.MediaUrl}Seg{_segment.Id}-Frag{fragId}";
+                byte[] fragBytes = await HttpDownloader.GetBytesAsync(_media.Domain, url, _cts.Token);
+                if (!_stop)
                 {
-                    if (await _flv.WriteFragmentAsync(frag))
-                        Console.WriteLine(fragId + "/" + segment.FragsCount);
-                    else
-                        Console.WriteLine("nope " + fragId);
+                    await _writeTask;
+                    uint currentId = fragId;
+                    _writeTask = Task.Run(async () =>
+                    {
+                        if (await _flv.WriteFragmentAsync(fragBytes))
+                        {
+#if DEBUG
+                            System.Diagnostics.Debug.Print(currentId + "/" + _segment.FragsCount);
+#endif
+                            LastDownloadedFragment = _segment.Fragments[currentId];
+                            DownloadedFragment?.Invoke(this, null);
+                        }
+#if DEBUG
+                        else
+                            System.Diagnostics.Debug.Print("nope " + currentId);
+#endif
+                    });
                 }
-
             }
-            _downloaded = !_close;
-            _flv.Close();
-            if (!_close)
-                DownloadedFile?.Invoke(this, null);
+            Status = fragId == FragmentsCount + 1 ? DownloadStatus.Downloaded : DownloadStatus.Paused;
+            if (Status == DownloadStatus.Downloaded)
+                Close();
+        }
+
+        public void Stop()
+        {
+            _stop = true;
+            _cts?.Cancel();
         }
 
         public void Close()
         {
-            _close = true;
             _flv.Close();
         }
+        
+        public Tuple<int, int> GetProgressFromFile() => new Tuple<int, int>(_flv.GetLastTagTimestamp(), _flv.Duration);
     }
 }

@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
+using static Divvvv.HdsDump;
 
 namespace Divvvv
 {
@@ -14,10 +15,11 @@ namespace Divvvv
     {
         public Dictionary<string, string> ShowsDictionary { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        private readonly string _connId;
-        public User()
+        private string _connId;
+
+        public async Task Connect()
         {
-            _connId = Json.Value(Web.DownloadString("http://www.vvvvid.it/user/login"), "conn_id");
+            _connId = Json.Value(await HttpDownloader.GetStringAsync("http://www.vvvvid.it/user/login"), "conn_id");
             SyncShowsDictionary();
         }
 
@@ -25,11 +27,11 @@ namespace Divvvv
         {
             Parallel.For('a', 'z' + 1, async c =>
             {
-                string json = await Web.DownloadStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003/last?filter={c}&conn_id=" + _connId);
+                string json = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003/last?filter={c}&conn_id=" + _connId);
                 if (json.Contains("\"data\""))
                 {
                     string s;
-                    while ((s = await Web.DownloadStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003?filter={c}&conn_id=" + _connId)).Contains("\"data\""))
+                    while ((s = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003?filter={c}&conn_id=" + _connId)).Contains("\"data\""))
                         json += s;
                     foreach (Json j in json.Split("},{"))
                         ShowsDictionary[j["title"].Unescape()] = j["show_id"];
@@ -51,9 +53,11 @@ namespace Divvvv
 
         public async Task<Show> GetShow(string showId)
         {
-            Serie[] series = (await Web.DownloadStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/{showId}/seasons/?conn_id=" + _connId))
+            Serie[] series = (await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/{showId}/seasons/?conn_id=" + _connId))
                 .ReMatchesGroups("\"season_id\":(.+?),.*?\"name\":\"(.+?)\"").Select(g => new Serie { Name = g[2], Id = g[1] }).ToArray();
-            return new Show(showId, series, _connId);
+            var show = new Show(showId, series, _connId);
+            await show.FetchEpisodesAsync();
+            return show; 
         }
     }
 
@@ -68,21 +72,20 @@ namespace Divvvv
             _showId = showId;
             Series = series;
             _connId = connId;
-            GetSeriesEpisodes();
         }
 
         public string ShowTitle { get; private set; } = null;
         public Serie[] Series { get; }
 
-        private void GetSeriesEpisodes()
+        public async Task FetchEpisodesAsync()
         {
             foreach (var s in Series)
-                s.Episodes = DownloadSerieEpisodes(s.Id);
+                s.Episodes = await DownloadSerieEpisodesAsync(s.Id);
         }
 
-        private IEnumerable<Episode> DownloadSerieEpisodes(string serieId)
+        private async Task<IEnumerable<Episode>> DownloadSerieEpisodesAsync(string serieId)
         {
-            Json js = Web.DownloadString($"http://www.vvvvid.it/vvvvid/ondemand/{_showId}/season/{serieId}?conn_id=" + _connId);
+            Json js = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/{_showId}/season/{serieId}?conn_id=" + _connId);
             if (ShowTitle == null)
                 ShowTitle = js["show_title"];
             return js.ToString().Split("},{").Select(s => new Json(s)).Select(j =>
@@ -99,8 +102,6 @@ namespace Divvvv
 
     public class Episode : INotifyPropertyChanged
     {
-        private readonly string _manifestLink;
-
         public Episode(string showTitle, string manifestLink, string epNumber, string epTitle, string thumbLink)
         {
             ShowTitle = showTitle;
@@ -108,10 +109,56 @@ namespace Divvvv
             EpTitle = epTitle;
             Thumb = thumbLink == "" ? new BitmapImage() : new BitmapImage(new Uri("http://" + thumbLink.ReMatch(@"\/\/(.+)")));
             manifestLink = DecodeManifestLink(manifestLink);
-            _manifestLink = manifestLink.Contains("akamaihd") ? manifestLink + "?hdcore=3.6.0" : $"http://wowzaondemand.top-ix.org/videomg/_definst_/mp4:{manifestLink}/manifest.f4m";
+            manifestLink = manifestLink.Contains("akamaihd") ? manifestLink + "?hdcore=3.6.0" : $"http://wowzaondemand.top-ix.org/videomg/_definst_/mp4:{manifestLink}/manifest.f4m";
+            FileName = string.Format("{0}\\{0} {1} - {2}.flv", SanitizeFileName(ShowTitle), EpNumber, SanitizeFileName(EpTitle));
+            _hds = new HdsDump(manifestLink, FileName);
+            _hds.DownloadedFragment += Hds_DownloadedFragment;
+            _hds.DownloadStatusChanged += Hds_DownloadStatusChanged;
+            DownloadStatus = _hds.Status;
+            if (_hds.Status == DownloadStatus.Paused)
+            {
+                var progress = _hds.GetProgressFromFile();
+                DownloadedTS = TimeSpan.FromMilliseconds(progress.Item1);
+                Percentage = progress.Item1 * 100 / progress.Item2;
+            }
         }
 
-        string DecodeManifestLink(string h)
+        private HdsDump _hds;
+
+        private DownloadStatus _downloadStatus;
+        public DownloadStatus DownloadStatus { get { return _downloadStatus; } private set { _downloadStatus = value; OnPropertyChanged(); } }
+        public string ShowTitle { get; }
+        public string EpNumber { get; }
+        public string EpTitle { get; }
+        public string FileName { get; }
+        public BitmapImage Thumb { get; }
+        private int _percentage;
+        public int Percentage { get { return _percentage; } private set { _percentage = value; OnPropertyChanged(); } }
+        private TimeSpan _downloadedTS;
+        public TimeSpan DownloadedTS { get { return _downloadedTS; } private set { _downloadedTS = value; OnPropertyChanged(); } }
+
+        public async Task Download()
+        {
+            if (DownloadStatus == DownloadStatus.Downloading)
+                _hds.Stop();
+            else
+                await _hds.Start();
+        }
+
+        private void Hds_DownloadedFragment(object sender, EventArgs e)
+        {
+            DownloadedTS = _hds.LastDownloadedFragment.TimestampEnd;
+            Percentage = (int)_hds.LastDownloadedFragment.Id * 100 / _hds.FragmentsCount;
+        }
+
+        private void Hds_DownloadStatusChanged(object sender, EventArgs e)
+        {
+            DownloadStatus = _hds.Status;
+        }
+
+        private string SanitizeFileName(string fileName) => string.Join("", fileName.Split(Path.GetInvalidFileNameChars()));
+
+        private string DecodeManifestLink(string h)
         {
             // TODO: they might change this, find a smart way to retrieve it from vvvvid.js
             var g = "MNOPIJKL89+/4567UVWXQRSTEFGHABCDcdefYZabstuvopqr0123wxyzklmnghij";
@@ -126,55 +173,6 @@ namespace Divvvv
                 sb.Append((char)(m.Last() << 2));
             return sb.ToString();
         }
-
-        private bool _isDownloading;
-        public bool IsDownloading { get { return _isDownloading; } private set { _isDownloading = value; OnPropertyChanged(); } }
-        public string ShowTitle { get; }
-        public string EpNumber { get; }
-        public string EpTitle { get; }
-        public BitmapImage Thumb { get; }
-        private int _percentage;
-        public int Percentage { get { return _percentage; } private set { _percentage = value; OnPropertyChanged(); } }
-        private TimeSpan _timeRemaining;
-        public TimeSpan TimeRemaining { get { return _timeRemaining; } private set { _timeRemaining = value; OnPropertyChanged(); } }
-
-        private HdsDump _hds;
-
-        public async void Download()
-        {
-            IsDownloading = !IsDownloading;
-            if (IsDownloading)
-            {
-                if (!Directory.Exists(ShowTitle))
-                    Directory.CreateDirectory(ShowTitle);
-                string fileName = string.Format("{0}\\{0} {1} - {2}.flv", SanitizeFileName(ShowTitle), EpNumber, SanitizeFileName(EpTitle));
-                _hds = new HdsDump(_manifestLink, fileName);
-                //_hds.DownloadedFragment += Program_DownloadedFragment;
-                _hds.DownloadedFile += Program_DownloadedFile;
-                await _hds.Start();
-            }
-            else
-            {
-                //_hds.DownloadedFragment -= Program_DownloadedFragment;
-                _hds.Close();
-            }
-        }
-
-        private void Program_DownloadedFragment(object sender, EventArgs e)//DownloadedFragmentArgs e)
-        {
-            //Percentage = e.Downloaded * 100 / e.FragmentsCount;
-            //TimeRemaining = e.TimeRemaining;
-        }
-
-        private void Program_DownloadedFile(object sender, EventArgs e)
-        {
-            _hds.DownloadedFile -= Program_DownloadedFile;
-            Percentage = 0;
-            TimeRemaining = new TimeSpan();
-            IsDownloading = false;
-        }
-
-        private string SanitizeFileName(string fileName) => string.Join("", fileName.Split(Path.GetInvalidFileNameChars()));
 
         public event PropertyChangedEventHandler PropertyChanged;
 

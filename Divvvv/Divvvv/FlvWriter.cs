@@ -32,6 +32,7 @@ namespace Divvvv
                     }
                     else
                     {
+                        IsOpen = true;
                         Resuming = true;
                         // look for duration in metadata
                         int dataSize = ReadInt24();
@@ -57,6 +58,8 @@ namespace Divvvv
         }
 
 
+        public bool IsOpen { get; private set; }
+
         public bool Resuming { get; }
 
         public int Duration { get; }
@@ -64,11 +67,15 @@ namespace Divvvv
 
         public async Task Create(byte[] metadata)
         {
-            if (Resuming) // heh
+            if (IsOpen) // heh
                 return;
-            _fs?.Close();
-            _fs = new FileStream(_fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
+            if (_fs == null)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_fileName));
+                _fs = new FileStream(_fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
+            }
             _fs.Seek(0, SeekOrigin.Begin);
+            IsOpen = true;
             var flvHeader = new byte[] { 0x46, 0x4c, 0x56, 1, 5, 0, 0, 0, 9 };
             await WriteAsync(flvHeader);
             Zero(4);

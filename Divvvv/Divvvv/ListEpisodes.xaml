@@ -10,7 +10,7 @@
     <ListBox.ItemTemplate>
         <DataTemplate>
             <DockPanel LastChildFill="False">
-                <Image Height="60" Width="107" DockPanel.Dock="Left" Source="{Binding Thumb}" />
+                <Image Height="60" Width="107" DockPanel.Dock="Left" Source="{Binding Thumb}" RenderOptions.BitmapScalingMode="Fant" />
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                     <Label Content="{Binding EpNumber}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontSize="16" />
                     <Label Content="-" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontSize="16" />
@@ -20,11 +20,17 @@
                     <Button.Style>
                         <Style TargetType="{x:Type Button}">
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsDownloading}" Value="True">
-                                    <Setter Property="Content" Value="Stop" />
+                                <DataTrigger Binding="{Binding DownloadStatus}" Value="{x:Static local:HdsDump+DownloadStatus.Nope}">
+                                    <Setter Property="Content" Value="Download"/>
                                 </DataTrigger>
-                                <DataTrigger Binding="{Binding IsDownloading}" Value="False">
-                                    <Setter Property="Content" Value="Download" />
+                                <DataTrigger Binding="{Binding DownloadStatus}" Value="{x:Static local:HdsDump+DownloadStatus.Paused}">
+                                    <Setter Property="Content" Value="Resume"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding DownloadStatus}" Value="{x:Static local:HdsDump+DownloadStatus.Downloading}">
+                                    <Setter Property="Content" Value="Pause"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding DownloadStatus}" Value="{x:Static local:HdsDump+DownloadStatus.Downloaded}">
+                                    <Setter Property="Content" Value="Open"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -32,21 +38,30 @@
                 </Button>
                 <Grid Margin="4,0" DockPanel.Dock="Right">
                     <Grid.Style>
-                        <Style TargetType="{x:Type Grid}">
+                        <Style TargetType="Grid">
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsDownloading}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible" />
+                                <DataTrigger Binding="{Binding DownloadStatus}" Value="{x:Static local:HdsDump+DownloadStatus.Downloaded}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
                                 </DataTrigger>
-                                <DataTrigger Binding="{Binding IsDownloading}" Value="False">
-                                    <Setter Property="Visibility" Value="Hidden" />
+                                <DataTrigger Binding="{Binding DownloadStatus}" Value="{x:Static local:HdsDump+DownloadStatus.Nope}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Grid.Style>
-                    <DockPanel>
-                        <TextBlock Text="{Binding Path=TimeRemaining, StringFormat=hh\\:mm\\:ss}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding Path=Percentage, StringFormat=\{0\}%}" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="4,0"/>
-                    </DockPanel>
+                    <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                        <StackPanel>
+                            <TextBlock Text="Downloaded: " HorizontalAlignment="Right"/>
+                            <!--<TextBlock Text="ETA: " HorizontalAlignment="Right"/>-->
+                        </StackPanel>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding DownloadedTS, Converter={local:TimeSpanToStringConverter}}"/>
+                                <TextBlock Text="{Binding Percentage, StringFormat=' ({0}%)'}"/>
+                            </StackPanel>
+                            <!--<TextBlock Text="{Binding TimeRemaining, Converter={local:TimeSpanToStringConverter}}"/>-->
+                        </StackPanel>
+                    </StackPanel>
                 </Grid>
             </DockPanel>
         </DataTemplate>

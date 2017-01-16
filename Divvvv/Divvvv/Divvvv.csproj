@@ -85,6 +85,7 @@
     <Compile Include="BoxReader.cs" />
     <Compile Include="F4m.cs" />
     <Compile Include="FlvWriter.cs" />
+    <Compile Include="HttpDownloader.cs" />
     <Compile Include="ListEpisodes.xaml.cs">
       <DependentUpon>ListEpisodes.xaml</DependentUpon>
     </Compile>

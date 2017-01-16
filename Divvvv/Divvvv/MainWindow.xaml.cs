@@ -14,6 +14,7 @@ namespace Divvvv
             InitializeComponent();
             txtTitle.Focus();
             user = new User();
+            user.Connect();
         }
 
         private async void button_Click(object sender, RoutedEventArgs e)
