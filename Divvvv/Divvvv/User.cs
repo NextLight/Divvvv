@@ -19,22 +19,25 @@ namespace Divvvv
 
         public async Task Connect()
         {
-            _connId = Json.GetStringRE(await HttpDownloader.GetStringAsync("http://www.vvvvid.it/user/login"), "conn_id");
+            _connId = await GetNewConnId();
             SyncShowsDictionary();
         }
 
+        private async Task<string> GetNewConnId() => Json.GetStringRE(await HttpDownloader.GetStringAsync("http://www.vvvvid.it/user/login"), "conn_id");
+
         public void SyncShowsDictionary()
         {
-            Parallel.For('a', 'z' + 1, async c =>
-            {
-                string json = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003/last?filter={c}&conn_id=" + _connId);
-                while (json?.Contains("\"data\"") == true)
-                {
-                    foreach (Dictionary<string, object> d in new Json(json).GetList("data"))
-                        ShowsDictionary[d["title"].ToString().Unescape()] = d["show_id"].ToString();
-                    json = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003?filter={c}&conn_id=" + _connId);
-                }
-            });
+            foreach (char c in Enumerable.Range('a', 'z' + 1 - 'a'))
+                Task.Run(async () => {
+                    string connId = await GetNewConnId(); // I need to get a new conn_id for each letter because of the way 10003/last => 10003 works
+                    string json = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003/last?filter={c}&conn_id={connId}");
+                    while (json?.Contains("\"data\"") == true)
+                    {
+                        foreach (Dictionary<string, object> d in new Json(json).GetList("data"))
+                            ShowsDictionary[d["title"].ToString().Unescape()] = d["show_id"].ToString();
+                        json = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003?filter={c}&conn_id={connId}");
+                    }
+                });
         }
 
         // TODO: wait for syncing to finish
@@ -51,7 +54,7 @@ namespace Divvvv
 
         public async Task<Show> GetShow(string showId)
         {
-            Serie[] series = (await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/{showId}/seasons/?conn_id=" + _connId))
+            Serie[] series = (await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/{showId}/seasons/?conn_id={_connId}"))
                 .ReMatchesGroups("\"season_id\":(.+?),.*?\"name\":\"(.+?)\"").Select(g => new Serie { Name = g[2], Id = g[1] }).ToArray();
             var show = new Show(showId, series, _connId);
             await show.FetchEpisodesAsync();
