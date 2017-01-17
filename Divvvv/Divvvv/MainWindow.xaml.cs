@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -14,7 +13,7 @@ namespace Divvvv
             InitializeComponent();
             txtTitle.Focus();
             user = new User();
-            user.Connect();
+            user.AddedShows += (s, e) => Dispatcher.Invoke(() => UpdateLstHint());
         }
 
         private async void button_Click(object sender, RoutedEventArgs e)
@@ -44,17 +43,18 @@ namespace Divvvv
 
         private void txtTitle_TextChanged(object sender, TextChangedEventArgs e)
         {
-            var text = txtTitle.Text.Trim().ToLower();
+            var text = txtTitle.Text.Trim();
             if (text.StartsWith("http") && text.Contains("vvvvid"))
-            {
                 lstHint.Visibility = Visibility.Hidden;
-            }
             else
-            {
-                var m = user.SearchShow(text);
-                lstHint.ItemsSource = m;
-                lstHint.Visibility = m.Any() ? Visibility.Visible : Visibility.Hidden;
-            }
+                UpdateLstHint();
+        }
+
+        private void UpdateLstHint()
+        {
+            var m = user.SearchShow(txtTitle.Text.Trim());
+            lstHint.ItemsSource = m;
+            lstHint.Visibility = m.Any() ? Visibility.Visible : Visibility.Hidden;
         }
 
         private void LstHintSelection()

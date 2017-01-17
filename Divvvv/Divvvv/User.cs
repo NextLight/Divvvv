@@ -15,7 +15,15 @@ namespace Divvvv
     {
         public Dictionary<string, string> ShowsDictionary { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+        public event EventHandler AddedShows;
+
         private string _connId;
+        private readonly object _showsListLock = new object();
+
+        public User()
+        {
+            Connect();
+        }
 
         public async Task Connect()
         {
@@ -23,9 +31,9 @@ namespace Divvvv
             SyncShowsDictionary();
         }
 
-        private async Task<string> GetNewConnId() => Json.GetStringRE(await HttpDownloader.GetStringAsync("http://www.vvvvid.it/user/login"), "conn_id");
+        private static async Task<string> GetNewConnId() => Json.GetStringRE(await HttpDownloader.GetStringAsync("http://www.vvvvid.it/user/login"), "conn_id");
 
-        public void SyncShowsDictionary()
+        private void SyncShowsDictionary()
         {
             foreach (char c in Enumerable.Range('a', 'z' + 1 - 'a'))
                 Task.Run(async () => {
@@ -35,14 +43,15 @@ namespace Divvvv
                     {
                         foreach (Dictionary<string, object> d in new Json(json).GetList("data"))
                             ShowsDictionary[d["title"].ToString().Unescape()] = d["show_id"].ToString();
+                        AddedShows?.Invoke(this, null);
                         json = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003?filter={c}&conn_id={connId}");
                     }
                 });
         }
 
-        // TODO: wait for syncing to finish
         public List<string> SearchShow(string text)
         {
+            text = text.ToLower();
             var m = ShowsDictionary.Keys.Where(s => s.ToLower().Contains(text)).ToList();
             m.Sort((s1, s2) =>
             {
