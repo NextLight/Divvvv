@@ -23,9 +23,9 @@ namespace Divvvv
         public enum DownloadStatus { Nope, Paused, Downloading, Downloaded }
 
         private DownloadStatus _status;
-        public DownloadStatus Status { get { return _status; } private set { _status = value; DownloadStatusChanged?.Invoke(this, null); } }
+        public DownloadStatus Status { get => _status; private set { _status = value; DownloadStatusChanged?.Invoke(this, null); } }
 
-        public Fragment LastDownloadedFragment { get; private set; }
+        public Fragment LastDownloadedFragment { get; private set; } = null;
 
         public int FragmentsCount { get; private set; }
 
@@ -40,22 +40,12 @@ namespace Divvvv
             Status = DownloadStatus.Downloading;
             _stop = false;
             _cts = new CancellationTokenSource();
-            if (_media == null)
-                _media = await F4m.GetMediaFromManifestUrl(_manifestUrl);
-            if (_segment == null)
-                _segment = F4m.GetSegmentFromBootstrapInfo(_media.BootstrapInfo);
-            FragmentsCount = (int)_segment.FragsCount;
-            if (!_flv.IsOpen)
-                await _flv.Create(_media.Metadata);
+            if (!_initialized)
+                await Init();
 
-            uint fragId = 1;
-            if (_flv.Resuming)
-                fragId = _segment.GetFragmentFromTimestamp(_flv.GetLastTagTimestamp()).Id;
+            uint fragId = (LastDownloadedFragment?.Id ?? 0) + 1;
             if (fragId > 1)
-            {
-                LastDownloadedFragment = _segment.Fragments[fragId - 1];
                 DownloadedFragment?.Invoke(this, null);
-            }
             
             for (; fragId <= _segment.FragsCount && !_stop; fragId++)
             {
@@ -99,5 +89,18 @@ namespace Divvvv
         }
         
         public Tuple<int, int> GetProgressFromFile() => new Tuple<int, int>(_flv.GetLastTagTimestamp(), _flv.Duration);
+
+        private bool _initialized = false;
+        private async Task Init()
+        {
+            _media = await F4m.GetMediaFromManifestUrl(_manifestUrl);
+            _segment = F4m.GetSegmentFromBootstrapInfo(_media.BootstrapInfo);
+            FragmentsCount = (int)_segment.FragsCount;
+            if (!_flv.IsOpen)
+                await _flv.Create(_media.Metadata);
+            if (_flv.Resuming)
+                LastDownloadedFragment = _segment.GetFragmentFromTimestamp(_flv.GetLastTagTimestamp());
+            _initialized = true;
+        }
     }
 }

@@ -121,7 +121,7 @@ namespace Divvvv
         {
             int bs = Array.BinarySearch(Fragments, ts);
             if (bs < 0)
-                bs = ~bs;
+                bs = ~bs - 1;
             return Fragments[bs];
         }
 
