@@ -87,12 +87,12 @@
     <Compile Include="F4m.cs" />
     <Compile Include="FlvWriter.cs" />
     <Compile Include="HttpDownloader.cs" />
-    <Compile Include="ListEpisodes.xaml.cs">
-      <DependentUpon>ListEpisodes.xaml</DependentUpon>
+    <Compile Include="ListEpisode.xaml.cs">
+      <DependentUpon>ListEpisode.xaml</DependentUpon>
     </Compile>
     <Compile Include="Stuff.cs" />
     <Compile Include="User.cs" />
-    <Page Include="ListEpisodes.xaml">
+    <Page Include="ListEpisode.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -139,6 +139,9 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="divvvv.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="play.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

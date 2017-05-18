@@ -1,8 +1,11 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 
 namespace Divvvv
@@ -37,6 +40,15 @@ namespace Divvvv
 
         public static IEnumerable<string[]> ReMatchesGroups(this string s, string re) =>
             Regex.Matches(s, re).Cast<Match>().Select(m => m.Groups.Cast<Group>().Select(g => g.Value).ToArray());
+
+        public static void DoNotAwait(this Task t) { }
+    }
+
+    public abstract class NotifyPropertyChanged : INotifyPropertyChanged
+    {
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string propertyName = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
     public class Json

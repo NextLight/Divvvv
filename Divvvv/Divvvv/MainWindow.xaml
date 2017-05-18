@@ -8,9 +8,23 @@
         Title="Divvvv" Height="610" Width="700">
     <Grid>
         <TextBox x:Name="txtTitle" TextWrapping="Wrap" Margin="0,0,50,0" Height="23" VerticalAlignment="Top" VerticalContentAlignment="Center" TextChanged="txtTitle_TextChanged" PreviewKeyDown="txtTitle_OnPreviewKeyDown"/>
-        <ListBox x:Name="lstHint" Margin="0,23,50,0" VerticalAlignment="Top" Panel.ZIndex="9" MouseDoubleClick="LstHint_OnMouseDoubleClick"  KeyDown="LstHint_OnKeyDown" Visibility="Hidden"/>
+        <ListBox x:Name="lstHint" Margin="0,23,50,0" VerticalAlignment="Top" Panel.ZIndex="9" MouseDoubleClick="lstHint_OnMouseDoubleClick"  KeyDown="lstHint_OnKeyDown" Visibility="Hidden"/>
         <Button Content="Go" VerticalAlignment="Top" Height="23" HorizontalAlignment="Right" Width="50" Click="button_Click" IsDefault="True"/>
         <Label x:Name="lblTitle" Margin="0,23,0,0" VerticalAlignment="Top" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontSize="14.667"/>
-        <TabControl x:Name="tabSeries" Margin="0,38,0,0" Padding="0"/>
+        <TabControl x:Name="tabSeries" Margin="0,38,0,0" Padding="0" ItemsSource="{Binding Series}" DisplayMemberPath="Name" SelectedItem="{Binding Series[0]}">
+            <TabControl.ContentTemplate>
+                <DataTemplate>
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding Episodes}" HorizontalContentAlignment="Stretch">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <local:ListEpisode Margin="2,2,0,0"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DataTemplate>
+            </TabControl.ContentTemplate>
+        </TabControl>
     </Grid>
 </Window>

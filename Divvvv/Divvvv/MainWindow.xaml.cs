@@ -1,4 +1,5 @@
 ﻿using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -7,16 +8,17 @@ namespace Divvvv
 {
     public partial class MainWindow : Window
     {
-        private readonly User user;
+        private readonly User _user;
+
         public MainWindow()
         {
             InitializeComponent();
             txtTitle.Focus();
-            user = new User();
-            user.AddedShows += (s, e) => Dispatcher.Invoke(() => UpdateLstHint());
+            _user = new User();
+            _user.AddedShows += (s, e) => Dispatcher.Invoke(() => UpdateLstHint());
         }
 
-        private async void button_Click(object sender, RoutedEventArgs e)
+        private async Task LoadShow()
         {
             txtTitle.CaretIndex = txtTitle.Text.Length;
             string matchLink = txtTitle.Text.ReMatch(@"https?://(.*?)/?$");
@@ -30,16 +32,15 @@ namespace Divvvv
             }
             else
             {
-                if (!user.ShowsDictionary.ContainsKey(txtTitle.Text))
+                if (!_user.ShowsDictionary.ContainsKey(txtTitle.Text))
                     return;
-                showId = user.ShowsDictionary[txtTitle.Text];
+                showId = _user.ShowsDictionary[txtTitle.Text];
             }
-            var show = await user.GetShow(showId);
-            lblTitle.Content = show.ShowTitle;
-            tabSeries.ItemsSource = show.Series.Select(s => new TabItem { Header = s.Name, Content = new ListEpisodes(s.Episodes) });
-            tabSeries.SelectedIndex = 0;
+            DataContext = await _user.GetShow(showId);
             txtTitle.Focus();
         }
+
+        private void button_Click(object sender, RoutedEventArgs e) => LoadShow().DoNotAwait();
 
         private void txtTitle_TextChanged(object sender, TextChangedEventArgs e)
         {
@@ -52,7 +53,7 @@ namespace Divvvv
 
         private void UpdateLstHint()
         {
-            var m = user.SearchShow(txtTitle.Text.Trim());
+            var m = _user.SearchShow(txtTitle.Text.Trim());
             lstHint.ItemsSource = m;
             lstHint.Visibility = m.Any() ? Visibility.Visible : Visibility.Hidden;
         }
@@ -63,16 +64,17 @@ namespace Divvvv
                 lstHint.SelectedIndex = 0;
             if (lstHint.SelectedIndex == -1)
                 return;
-            txtTitle.Text = (string) lstHint.SelectedItem;
+            txtTitle.Text = (string)lstHint.SelectedItem;
             lstHint.Visibility = Visibility.Hidden;
         }
 
-        private void LstHint_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
+        private void lstHint_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             LstHintSelection();
+            LoadShow().DoNotAwait();
         }
 
-        private void LstHint_OnKeyDown(object sender, KeyEventArgs e)
+        private void lstHint_OnKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter)
                 LstHintSelection();

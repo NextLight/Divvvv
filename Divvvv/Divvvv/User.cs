@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
@@ -22,10 +20,10 @@ namespace Divvvv
 
         public User()
         {
-            Connect();
+            Connect().DoNotAwait();
         }
 
-        public async Task Connect()
+        private async Task Connect()
         {
             _connId = await GetNewConnId();
             SyncShowsDictionary();
@@ -71,7 +69,12 @@ namespace Divvvv
         }
     }
 
-    class Serie { public string Name, Id; public IEnumerable<Episode> Episodes; }
+    class Serie
+    {
+        public string Name { get; set; }
+        public string Id { get; set; }
+        public IEnumerable<Episode> Episodes { get; set; }
+    }
 
     class Show
     {
@@ -111,17 +114,17 @@ namespace Divvvv
         }
     }
 
-    public class Episode : INotifyPropertyChanged
+    public class Episode : NotifyPropertyChanged
     {
-        public Episode(string showTitle, string manifestLink, string epNumber, string epTitle, string thumbLink)
+        public Episode(string showTitle, string manifestLink, string number, string title, string thumbLink)
         {
             ShowTitle = showTitle;
-            EpNumber = epNumber;
-            EpTitle = epTitle;
+            Number = number;
+            Title = title;
             Thumb = thumbLink == "" ? new BitmapImage() : new BitmapImage(new Uri("http://" + thumbLink.ReMatch(@"\/\/(.+)")));
             manifestLink = DecodeManifestLink(manifestLink);
             manifestLink = manifestLink.Contains("akamaihd") ? manifestLink + "?hdcore=3.6.0" : $"http://wowzaondemand.top-ix.org/videomg/_definst_/mp4:{manifestLink}/manifest.f4m";
-            FileName = string.Format("{0}\\{0} {1} - {2}.flv", SanitizeFileName(ShowTitle), EpNumber, SanitizeFileName(EpTitle));
+            FileName = string.Format("{0}\\{0} {1} - {2}.flv", SanitizeFileName(ShowTitle), Number, SanitizeFileName(Title));
             _hds = new HdsDump(manifestLink, FileName);
             _hds.DownloadedFragment += Hds_DownloadedFragment;
             _hds.DownloadStatusChanged += Hds_DownloadStatusChanged;
@@ -137,23 +140,23 @@ namespace Divvvv
         private HdsDump _hds;
 
         private DownloadStatus _downloadStatus;
-        public DownloadStatus DownloadStatus { get { return _downloadStatus; } private set { _downloadStatus = value; OnPropertyChanged(); } }
+        public DownloadStatus DownloadStatus { get => _downloadStatus; private set { _downloadStatus = value; OnPropertyChanged(); } }
         public string ShowTitle { get; }
-        public string EpNumber { get; }
-        public string EpTitle { get; }
+        public string Number { get; }
+        public string Title { get; }
         public string FileName { get; }
         public BitmapImage Thumb { get; }
         private int _percentage;
-        public int Percentage { get { return _percentage; } private set { _percentage = value; OnPropertyChanged(); } }
+        public int Percentage { get => _percentage; private set { _percentage = value; OnPropertyChanged(); } }
         private TimeSpan _downloadedTS;
-        public TimeSpan DownloadedTS { get { return _downloadedTS; } private set { _downloadedTS = value; OnPropertyChanged(); } }
+        public TimeSpan DownloadedTS { get => _downloadedTS; private set { _downloadedTS = value; OnPropertyChanged(); } }
 
-        public async Task Download()
+        public void ToggleDownload()
         {
             if (DownloadStatus == DownloadStatus.Downloading)
                 _hds.Stop();
             else
-                await _hds.Start();
+                _hds.Start().DoNotAwait();
         }
 
         private void Hds_DownloadedFragment(object sender, EventArgs e)
@@ -184,9 +187,5 @@ namespace Divvvv
                 sb.Append((char)(m.Last() << 2));
             return sb.ToString();
         }
-
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        void OnPropertyChanged([CallerMemberName] string propertyName = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
