@@ -16,22 +16,22 @@ namespace Divvvv
 
         public User()
         {
-            Connect().DoNotAwait();
+            ConnectAsync().DoNotAwait();
         }
 
-        private async Task Connect()
+        private async Task ConnectAsync()
         {
-            _connId = await GetNewConnId();
-            SyncShowsDictionary();
+            _connId = await GetNewConnIdAsync();
+            SyncShowsDictionaryAsync().DoNotAwait();
         }
 
-        private static async Task<string> GetNewConnId() => Json.GetStringRE(await HttpDownloader.GetStringAsync("http://www.vvvvid.it/user/login"), "conn_id");
+        private static async Task<string> GetNewConnIdAsync() => Json.GetStringRE(await HttpDownloader.GetStringAsync("http://www.vvvvid.it/user/login"), "conn_id");
 
-        private void SyncShowsDictionary()
+        private async Task SyncShowsDictionaryAsync()
         {
-            foreach (char c in Enumerable.Range('a', 'z' + 1 - 'a'))
+            await Task.WhenAll(Enumerable.Range('a', 'z' + 1 - 'a').Select(c =>
                 Task.Run(async () => {
-                    string connId = await GetNewConnId(); // I need to get a new conn_id for each letter because of the way 10003/last => 10003 works
+                    string connId = await GetNewConnIdAsync(); // I need to get a new conn_id for each letter because of the way 10003/last => 10003 works
                     string json = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003/last?filter={c}&conn_id={connId}");
                     while (json?.Contains("\"data\"") == true)
                     {
@@ -40,13 +40,13 @@ namespace Divvvv
                         AddedShows?.Invoke(this, null);
                         json = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003?filter={c}&conn_id={connId}");
                     }
-                });
+                })));
         }
 
         public List<string> SearchShow(string text)
         {
             text = text.ToLower();
-            var m = ShowsDictionary.Keys.Where(s => s.ToLower().Contains(text)).ToList();
+            var m = ShowsDictionary.Keys.Where(s => s != null && s.ToLower().Contains(text)).ToList();
             m.Sort((s1, s2) =>
             {
                 int c = s1.ToLower().IndexOf(text).CompareTo(s2.ToLower().IndexOf(text));
