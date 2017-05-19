@@ -8,6 +8,7 @@ namespace Divvvv
     class User
     {
         public Dictionary<string, string> ShowsDictionary { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, Show> _showsCache = new Dictionary<string, Show>();
 
         public event EventHandler AddedShows;
 
@@ -55,11 +56,13 @@ namespace Divvvv
             return m;
         }
 
-        public async Task<Show> GetShow(string showId)
+        public async Task<Show> GetShowAsync(string showId)
         {
+            if (_showsCache.ContainsKey(showId))
+                return _showsCache[showId];
             var show = new Show(showId);
             await show.FetchSeriesAsync(_connId);
-            return show; 
+            return _showsCache[showId] = show; 
         }
     }
 }

@@ -7,7 +7,7 @@ using static Divvvv.HdsDump;
 
 namespace Divvvv
 {
-    public class Episode : NotifyPropertyChanged
+    public class Episode : NotifyPropertyChanged, IDisposable
     {
         public Episode(string showTitle, string manifestLink, string number, string title, string thumbLink)
         {
@@ -80,5 +80,7 @@ namespace Divvvv
                 sb.Append((char)(m.Last() << 2));
             return sb.ToString();
         }
+
+        public void Dispose() => _hds.Dispose();
     }
 }

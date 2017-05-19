@@ -36,7 +36,7 @@ namespace Divvvv
                     return;
                 showId = _user.ShowsDictionary[txtTitle.Text];
             }
-            DataContext = await _user.GetShow(showId);
+            DataContext = await _user.GetShowAsync(showId);
             txtTitle.Focus();
         }
 
