@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace Divvvv
 {
-    class FlvWriter
+    class FlvWriter : IDisposable
     {
         private FileStream _fs = null;
         private readonly string _fileName;
@@ -15,50 +15,36 @@ namespace Divvvv
             var fi = new FileInfo(fileName);
             if (fi.Exists && fi.Length > 25)
             {
-                _fs = new FileStream(fileName, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
+                Open();
                 _fs.Seek(-3, SeekOrigin.End);
                 int lastTagSize = ReadInt24();
-                _fs.Seek(-4 - lastTagSize, SeekOrigin.End);
-                if (ReadByte() == 0x12) // if the last fragment is metadata do not resume
+                // if the last fragment is not metadata and the first fragment is metadata then resume
+                if (_fs.Seek(-4 - lastTagSize, SeekOrigin.End) > 0 && ReadByte() != 0x12 && _fs.Seek(13, SeekOrigin.Begin) == 13 && ReadByte() == 0x12)
                 {
-                    _fs.Seek(0, SeekOrigin.Begin);
-                }
-                else
-                {
-                    _fs.Seek(13, SeekOrigin.Begin);
-                    if (ReadByte() != 0x12) // bad flv file (?)
+                    Resuming = true;
+                    // look for duration in metadata
+                    int dataSize = ReadInt24();
+                    _fs.Seek(4, SeekOrigin.Current);
+                    var duration = new byte[] { 0x64, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e };
+                    for (int _ = 0; _ < dataSize; _++)
                     {
-                        _fs.Seek(0, SeekOrigin.Begin);
-                    }
-                    else
-                    {
-                        IsOpen = true;
-                        Resuming = true;
-                        // look for duration in metadata
-                        int dataSize = ReadInt24();
-                        _fs.Seek(4, SeekOrigin.Current);
-                        var duration = new byte[] { 0x64, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e };
-                        for (int _ = 0; _ < dataSize; _++)
-                        {
-                            int i;
-                            for (i = 0; i < duration.Length; i++)
-                                if (ReadByte() != duration[i])
-                                    break;
-                            if (i == duration.Length) // found it
-                            {
-                                _fs.Seek(1, SeekOrigin.Current);
-                                Duration = (int)(ReadDouble() * 1000);
+                        int i;
+                        for (i = 0; i < duration.Length; i++)
+                            if (ReadByte() != duration[i])
                                 break;
-                            }
+                        if (i == duration.Length) // found it
+                        {
+                            _fs.Seek(1, SeekOrigin.Current);
+                            Duration = (int)(ReadDouble() * 1000);
+                            break;
                         }
-                        _fs.Seek(0, SeekOrigin.End);
                     }
                 }
             }
         }
 
 
-        public bool IsOpen { get; private set; }
+        public bool IsOpen => _fs?.CanWrite ?? false;
 
         public bool Resuming { get; }
 
@@ -67,15 +53,9 @@ namespace Divvvv
 
         public async Task Create(byte[] metadata)
         {
-            if (IsOpen) // heh
-                return;
-            if (_fs == null)
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(_fileName));
-                _fs = new FileStream(_fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
-            }
+            if (!IsOpen)
+                Open(true);
             _fs.Seek(0, SeekOrigin.Begin);
-            IsOpen = true;
             var flvHeader = new byte[] { 0x46, 0x4c, 0x56, 1, 5, 0, 0, 0, 9 };
             await WriteAsync(flvHeader);
             Zero(4);
@@ -96,15 +76,35 @@ namespace Divvvv
             br.Skip(4);
             int tsFrag = br.ReadByte() << 0x10 | br.ReadByte() << 0x8 | br.ReadByte() | br.ReadByte() << 0x18;
             br.Skip(-8);
-            if (tsFrag < GetLastTagTimestamp()) // don't write aleady written fragment.
+            if (tsFrag < GetLastTagTimestamp()) // don't write aleady written fragment
                 return false;
             _fs.Seek(0, SeekOrigin.End);
             await _fs.WriteAsync(frag, br.Position, frag.Length - br.Position);
             return true;
         }
 
-        public void Close() => _fs.Dispose();
-        
+        public int GetLastTagTimestamp()
+        {
+            _fs.Seek(-3, SeekOrigin.End);
+            _fs.Seek(-ReadInt24(), SeekOrigin.Current);
+            return ReadInt24() | ReadByte() << 0x18; // the 4th byte is the most significant
+        }
+
+        public void Open() => Open(false);
+
+        private void Open(bool create)
+        {
+            if (IsOpen)
+                _fs.Close();
+            else
+                Directory.CreateDirectory(Path.GetDirectoryName(_fileName));
+            _fs = new FileStream(_fileName, create ? FileMode.OpenOrCreate : FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+        }
+
+        public void Close() { if (IsOpen) _fs.Close(); }
+
+        public void Dispose() => Close();
+
 
         private int ReadByte() => _fs.ReadByte();
 
@@ -114,19 +114,12 @@ namespace Divvvv
 
         private int ReadInt24() => ReadByte() << 0x10 | ReadByte() << 0x8 | ReadByte();
 
-        public double ReadDouble()
+        private double ReadDouble()
         {
             var array = new byte[8];
             _fs.Read(array, 0, 8);
             return BitConverter.ToDouble(array.Reverse().ToArray(), 0); // Again, numbers are stored in big-endian so i need to reverse
         }
-
-        public int GetLastTagTimestamp()
-        {
-            _fs.Seek(-3, SeekOrigin.End);
-            _fs.Seek(-ReadInt24(), SeekOrigin.Current);
-            return ReadInt24() | ReadByte() << 0x18; // the 4th byte is the most significant
-        } 
 
         private void WriteInt24(int i)
         {

@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace Divvvv
 {
-    public class HdsDump
+    public class HdsDump : IDisposable
     {
         private readonly string _manifestUrl;
         private readonly FlvWriter _flv;
@@ -42,6 +42,8 @@ namespace Divvvv
             _cts = new CancellationTokenSource();
             if (!_initialized)
                 await Init();
+            if (!_flv.IsOpen)
+                _flv.Open();
 
             uint fragId = (LastDownloadedFragment?.Id ?? 0) + 1;
             if (fragId > 1)
@@ -51,43 +53,46 @@ namespace Divvvv
             {
                 string url = $"/{_media.BaseUrl}/{_media.MediaUrl}Seg{_segment.Id}-Frag{fragId}";
                 byte[] fragBytes = await HttpDownloader.GetBytesAsync(_media.Domain, url, _cts.Token);
-                if (!_stop)
+                if (_stop)
+                    break;
+                await _writeTask;
+                uint currentId = fragId;
+                _writeTask = Task.Run(async () =>
                 {
-                    await _writeTask;
-                    uint currentId = fragId;
-                    _writeTask = Task.Run(async () =>
+                    if (await _flv.WriteFragmentAsync(fragBytes))
                     {
-                        if (await _flv.WriteFragmentAsync(fragBytes))
-                        {
 #if DEBUG
-                            System.Diagnostics.Debug.Print(currentId + "/" + _segment.FragsCount);
+                        System.Diagnostics.Debug.Print(currentId + "/" + _segment.FragsCount);
 #endif
-                            LastDownloadedFragment = _segment.Fragments[currentId];
-                            DownloadedFragment?.Invoke(this, null);
-                        }
+                        LastDownloadedFragment = _segment.Fragments[currentId];
+                        DownloadedFragment?.Invoke(this, null);
+                    }
 #if DEBUG
-                        else
-                            System.Diagnostics.Debug.Print("nope " + currentId);
+                    else
+                        System.Diagnostics.Debug.Print("nope " + currentId);
 #endif
-                    });
-                }
+                });
             }
-            Status = fragId == FragmentsCount + 1 ? DownloadStatus.Downloaded : DownloadStatus.Paused;
-            if (Status == DownloadStatus.Downloaded)
-                Close();
+            await _writeTask;
+            if (LastDownloadedFragment.Id == FragmentsCount)
+                Status = DownloadStatus.Downloaded;
+            Close();
         }
 
         public void Stop()
         {
             _stop = true;
             _cts?.Cancel();
+            Status = DownloadStatus.Paused;
         }
 
         public void Close()
         {
             _flv.Close();
         }
-        
+
+        public void Dispose() => Close();
+
         public Tuple<int, int> GetProgressFromFile() => new Tuple<int, int>(_flv.GetLastTagTimestamp(), _flv.Duration);
 
         private bool _initialized = false;
@@ -96,10 +101,10 @@ namespace Divvvv
             _media = await F4m.GetMediaFromManifestUrl(_manifestUrl);
             _segment = F4m.GetSegmentFromBootstrapInfo(_media.BootstrapInfo);
             FragmentsCount = (int)_segment.FragsCount;
-            if (!_flv.IsOpen)
-                await _flv.Create(_media.Metadata);
             if (_flv.Resuming)
                 LastDownloadedFragment = _segment.GetFragmentFromTimestamp(_flv.GetLastTagTimestamp());
+            else
+                await _flv.Create(_media.Metadata);
             _initialized = true;
         }
     }
