@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,7 +8,7 @@ namespace Divvvv
 {
     class User
     {
-        public Dictionary<string, string> ShowsDictionary { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        public ConcurrentDictionary<string, string> ShowsDictionary { get; } = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private Dictionary<string, Show> _showsCache = new Dictionary<string, Show>();
 
         public event EventHandler AddedShows;

@@ -7,8 +7,8 @@
          mc:Ignorable="d" Loaded="DockPanel_Loaded"
          d:DesignHeight="60" d:DesignWidth="600" 
          LastChildFill="False">
-    <Grid>
-        <Image Height="60" Width="107" DockPanel.Dock="Left" Source="{Binding Thumb}" RenderOptions.BitmapScalingMode="Fant"/>
+    <Grid DockPanel.Dock="Left">
+        <Image Height="60" Width="107" Source="{Binding Thumb}" RenderOptions.BitmapScalingMode="Fant"/>
         <Grid Name="play" Opacity="0">
             <Grid.Style>
                 <Style TargetType="Grid">
@@ -39,11 +39,6 @@
             <Image Source="play.png" Height="34" Opacity="0.7" MouseLeftButtonDown="Image_MouseLeftButtonDown"/>
         </Grid>
     </Grid>
-    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-        <Label Content="{Binding Number}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontSize="16" />
-        <Label Content="-" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontSize="16" />
-        <Label Content="{Binding Title}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontSize="16" />
-    </StackPanel>
     <Button DockPanel.Dock="Right" Click="Button_Click" FontSize="14.667" Width="70" >
         <Button.Style>
             <Style TargetType="{x:Type Button}">
@@ -91,4 +86,9 @@
             </StackPanel>
         </StackPanel>
     </Grid>
+    <StackPanel Orientation="Horizontal">
+        <Label Content="{Binding Number}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontSize="16" />
+        <Label Content="-" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontSize="16" />
+        <Label Content="{Binding Title}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontSize="16" />
+    </StackPanel>
 </DockPanel>
