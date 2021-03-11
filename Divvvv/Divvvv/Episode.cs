@@ -14,9 +14,9 @@ namespace Divvvv
             ShowTitle = showTitle;
             Number = number;
             Title = title;
-            Thumb = thumbLink == "" ? new BitmapImage() : new BitmapImage(new Uri("http://" + thumbLink.ReMatch(@"\/\/(.+)")));
+            Thumb = thumbLink == "" ? new BitmapImage() : new BitmapImage(new Uri("https://" + thumbLink.ReMatch(@"\/\/(.+)")));
             manifestLink = DecodeManifestLink(manifestLink);
-            manifestLink = manifestLink.Contains("akamaihd") ? manifestLink + "?hdcore=3.6.0" : $"http://wowzaondemand.top-ix.org/videomg/_definst_/mp4:{manifestLink}/manifest.f4m";
+            manifestLink = manifestLink.Contains("akamaihd") ? manifestLink + "?hdcore=3.6.0" : $"https://wowzaondemand.top-ix.org/videomg/_definst_/mp4:{manifestLink}/manifest.f4m";
             FileName = string.Format("{0}\\{0} {1} - {2}.flv", SanitizeFileName(ShowTitle), Number, SanitizeFileName(Title));
             _hds = new HdsDump(manifestLink, FileName);
             _hds.DownloadedFragment += Hds_DownloadedFragment;

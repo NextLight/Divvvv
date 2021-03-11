@@ -1,6 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net.Http;
+﻿using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -8,62 +7,23 @@ namespace Divvvv
 {
     static class HttpDownloader
     {
-        private readonly static Dictionary<string, HttpClient> _clients = new Dictionary<string, HttpClient>();
+        private static readonly HttpClient _client = new HttpClient(new HttpClientHandler { UseCookies = true });
 
-        private static async Task<HttpContent> GetContentAsync(string baseUrl, string requestUrl, CancellationToken ct)
+        static HttpDownloader()
         {
-            HttpResponseMessage response = null;
-            try
-            {
-                HttpClient client;
-                if (!_clients.ContainsKey(baseUrl))
-                {
-                    client = new HttpClient { BaseAddress = new Uri(baseUrl) };
-                    client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (X11; CrOS x86_64 7428.0.2015) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2483.0 Safari/537.36");
-                    _clients.Add(baseUrl, client);
-                }
-                else
-                    client = _clients[baseUrl];
-                response = await client.GetAsync(requestUrl, ct);
-                return response.Content;
-            }
-            catch
-            {
-                response?.Dispose();
-                return null;
-            }
+            _client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36");
         }
 
-        public static async Task<byte[]> GetBytesAsync(string baseUrl, string requestUrl, CancellationToken ct = default(CancellationToken))
+        public static async Task<byte[]> GetBytesAsync(string url, CancellationToken ct = default)
         {
-            HttpContent content = await GetContentAsync(baseUrl, requestUrl, ct);
-            if (content == null)
-                return null;
-            byte[] res = await content.ReadAsByteArrayAsync();
-            content.Dispose();
-            return res;
+            using (var r = await _client.GetAsync(url, ct))
+                return await r.Content.ReadAsByteArrayAsync();
         }
 
-        public static Task<byte[]> GetBytesAsync(string url, CancellationToken ct = default(CancellationToken))
+        public static async Task<string> GetStringAsync(string url, CancellationToken ct = default)
         {
-            int slash = url.IndexOf('/', 8);
-            return GetBytesAsync(url.Substring(0, slash), url.Substring(slash), ct);
-        }
-
-        public static async Task<string> GetStringAsync(string baseUrl, string requestUrl, CancellationToken ct = default(CancellationToken))
-        {
-            HttpContent content = await GetContentAsync(baseUrl, requestUrl, ct);
-            if (content == null)
-                return null;
-            string res = await content.ReadAsStringAsync();
-            content.Dispose();
-            return res;
-        }
-
-        public static Task<string> GetStringAsync(string url, CancellationToken ct = default(CancellationToken))
-        {
-            int slash = url.IndexOf('/', 8);
-            return GetStringAsync(url.Substring(0, slash), url.Substring(slash), ct);
+            using (var r = await _client.GetAsync(url, ct))
+                return await r.Content.ReadAsStringAsync();
         }
     }
 }

@@ -12,11 +12,9 @@ namespace Divvvv
             XmlNode xmlManifest = await HttpDownloader.GetStringAsync(manifestUrl);
             // pick media with higher bitrate (i.e. better quality)
             XmlNode xmlMedia = xmlManifest.Nodes.Where(x => x.Tag == "media").MaxBy(x => int.Parse(x["bitrate"]));
-            var ulrMatches = manifestUrl.ReMatchGroups(@"(^https?://[a-zA-Z-0-9\-\.]+?/)(.+)/");
             return new Media
             {
-                Domain = ulrMatches[1],
-                BaseUrl = ulrMatches[2],
+                Url = manifestUrl.ReMatch(@"(^https?://.+)/"),
                 MediaUrl = xmlMedia["url"],
                 BootstrapInfo = Convert.FromBase64String(xmlManifest.Nodes.First(x => x.Tag == "bootstrapInfo" && x["id"] == xmlMedia["bootstrapInfoId"]).InnerString),
                 Metadata = Convert.FromBase64String(xmlMedia.Nodes.First().InnerString)
@@ -77,8 +75,7 @@ namespace Divvvv
 
     class Media
     {
-        public string Domain { get; internal set; }
-        public string BaseUrl { get; set; }
+        public string Url { get; set; }
         public string MediaUrl { get; set; }
         public byte[] BootstrapInfo { get; set; }
         public byte[] Metadata { get; set; }

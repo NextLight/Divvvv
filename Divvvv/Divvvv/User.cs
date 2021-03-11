@@ -14,7 +14,6 @@ namespace Divvvv
         public event EventHandler AddedShows;
 
         private string _connId;
-        private readonly object _showsListLock = new object();
 
         public User()
         {
@@ -27,22 +26,24 @@ namespace Divvvv
             SyncShowsDictionaryAsync().DoNotAwait();
         }
 
-        private static async Task<string> GetNewConnIdAsync() => Json.GetStringRE(await HttpDownloader.GetStringAsync("http://www.vvvvid.it/user/login"), "conn_id");
+        private static async Task<string> GetNewConnIdAsync() => Json.GetStringRE(await HttpDownloader.GetStringAsync("https://www.vvvvid.it/user/login"), "conn_id");
 
         private async Task SyncShowsDictionaryAsync()
         {
-            await Task.WhenAll(Enumerable.Range('a', 'z' + 1 - 'a').Select(c =>
+            await Task.WhenAll(Enumerable.Range('a', 'z' + 1 - 'a').Select(i =>
                 Task.Run(async () => {
+                    char c = (char)i;
                     string connId = await GetNewConnIdAsync(); // I need to get a new conn_id for each letter because of the way 10003/last => 10003 works
-                    string json = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003/last?filter={c}&conn_id={connId}");
+                    string json = await HttpDownloader.GetStringAsync($"https://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003/last?filter={c}&conn_id={connId}");
                     while (json?.Contains("\"data\"") == true)
                     {
                         foreach (Dictionary<string, object> d in new Json(json).GetList("data"))
                             ShowsDictionary[d["title"].ToString().Unescape()] = d["show_id"].ToString();
                         AddedShows?.Invoke(this, null);
-                        json = await HttpDownloader.GetStringAsync($"http://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003?filter={c}&conn_id={connId}");
+                        json = await HttpDownloader.GetStringAsync($"https://www.vvvvid.it/vvvvid/ondemand/anime/channel/10003?filter={c}&conn_id={connId}");
                     }
-                })));
+                })
+           ));
         }
 
         public List<string> SearchShow(string text)

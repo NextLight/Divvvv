@@ -51,8 +51,8 @@ namespace Divvvv
             
             for (; fragId <= _segment.FragsCount && !_stop; fragId++)
             {
-                string url = $"/{_media.BaseUrl}/{_media.MediaUrl}Seg{_segment.Id}-Frag{fragId}";
-                byte[] fragBytes = await HttpDownloader.GetBytesAsync(_media.Domain, url, _cts.Token);
+                string url = $"{_media.Url}/{_media.MediaUrl}Seg{_segment.Id}-Frag{fragId}";
+                byte[] fragBytes = await HttpDownloader.GetBytesAsync(url, _cts.Token);
                 if (_stop)
                     break;
                 await _writeTask;
